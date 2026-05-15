@@ -193,11 +193,29 @@ audio{height:26px;outline:none;flex:1;min-width:130px;filter:brightness(.85) sep
   input[type="range"]::-moz-range-track{ height:10px;border-radius:999px;background:linear-gradient(90deg,var(--accent),#6ad0ff); }
   input[type="range"]::-moz-range-thumb{ width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid var(--accent);box-shadow:0 2px 6px rgba(0,0,0,0.35); }
   input[type="range"]:focus { box-shadow:0 0 0 6px rgba(30,144,255,0.06); }
+
+  /* Ensure modal content never exceeds viewport and string previews scroll nicely */
+  .modal {
+    max-height: calc(100vh - 80px);
+    overflow: auto;
+  }
+  /* Styled, scrollable text preview - constrained to modal; wraps long lines */
+  #modalText {
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: #ddd;
+    background: #0b0b0b;
+    padding: .6rem;
+    border-radius: 6px;
+    margin-top: .6rem;
+    max-height: 60vh;
+    overflow: auto;
+  }
 </style>
 </head>
 <body>
 <header>
-  <img id="doomLogo" src="d.png" width="36" height="36" alt="d.oom logo" style="display:block;object-fit:contain;"/>
+  <img id="doomLogo" src="/d.png" width="36" height="36" alt="d.oom logo" style="display:block;object-fit:contain;"/>
   <div style="flex:1">
     <h1>DOOM WAD Extractor</h1>
     <div class="subtitle">Textures · Sprites · Flats · Images · Sounds · Music (MUS→WAV) — All assets decoded client-side</div>
@@ -294,7 +312,8 @@ audio{height:26px;outline:none;flex:1;min-width:130px;filter:brightness(.85) sep
     <div class="tab" data-panel="images"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Graphics</div>
     <div class="tab" data-panel="sounds"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>Sounds</div>
     <div class="tab" data-panel="music"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>Music</div>
-    <div class="tab" data-panel="downloads"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Downloads</div>
+    <div class="tab" data-panel="strings"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><path d="M3 5h18M3 12h18M3 19h18"/></svg>Strings</div>
+  <div class="tab" data-panel="downloads"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Downloads</div>
   </div>
 
   <!-- TEXTURES -->
@@ -361,6 +380,15 @@ audio{height:26px;outline:none;flex:1;min-width:130px;filter:brightness(.85) sep
       <button class="btn btn-sm btn-gray" style="margin-left:auto" onclick="zipAssets('music')">⬇ ZIP All WAV</button>
     </div>
     <div class="music-list" id="musicList"></div>
+  </div>
+
+  <!-- STRINGS -->
+  <div class="panel" id="panel-strings">
+    <div class="toolbar">
+      <input class="search-box" placeholder="Search strings…" oninput="filterStrings(this.value)" id="stringsSearch">
+      <button class="btn btn-sm btn-gray" onclick="zipAssets('strings')">⬇ ZIP All TXT</button>
+    </div>
+    <div id="stringsList" style="display:flex;flex-direction:column;gap:.4rem;padding:1rem"></div>
   </div>
 
   <!-- DOWNLOADS -->
@@ -620,7 +648,7 @@ function musToWav(mus) {
 // ── WAD Parser ─────────────────────────────────────────────────────────────
 const $=id=>document.getElementById(id);
 let WAD=null,raw=null;
-let assets={textures:[],sprites:[],flats:[],images:[],sounds:[],music:[]};
+let assets={textures:[],sprites:[],flats:[],images:[],sounds:[],music:[],strings:[]};
 let spriteGroups={};
 let palette=[];
 let currentAudio=null,currentPlayBtn=null;
@@ -655,6 +683,21 @@ function setP(pct,label,log){
 function fmtSize(n){if(n<1024)return n+'B';if(n<1048576)return(n/1024).toFixed(1)+'KB';return(n/1048576).toFixed(1)+'MB';}
 function fmtDate(d){return d.toLocaleString();}
 function tick(){return new Promise(r=>setTimeout(r,0));}
+
+// Simple printable-text detector used for extracting "strings" lumps.
+// Accepts a Uint8Array (or ArrayBuffer view) and returns true if the chunk appears to be mostly printable ASCII/UTF-8 text.
+function isProbablyText(buf){
+  if(!buf || buf.length===0) return false;
+  const view = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  let printable = 0;
+  const lim = Math.min(view.length, 512);
+  for(let i=0;i<lim;i++){
+    const b = view[i];
+    if(b===9||b===10||b===13) printable++;
+    else if(b>=32 && b<127) printable++;
+  }
+  return (printable / lim) > 0.85;
+}
 
 async function loadWad(file) {
   // remember loaded filename for zip naming
@@ -705,6 +748,21 @@ async function loadWad(file) {
   }
   const patchLump={};
   for(const l of lumpList) patchLump[l.name]={offset:l.offset,size:l.size};
+
+  // Extract simple printable "strings" lumps (short preview text). We treat any lump
+  // whose first 512 bytes are mostly printable as a text lump for the new Strings tab.
+  assets.strings = [];
+  for(const l of lumpList){
+    if(!l.size || l.size < 4) continue;
+    const slice = raw.slice(l.offset, l.offset + Math.min(2048, l.size));
+    if(isProbablyText(slice)){
+      // decode as UTF-8, but fallback gracefully
+      let txt = '';
+      try { txt = new TextDecoder().decode(slice); } catch(e) { txt = Array.from(slice).map(b=>String.fromCharCode(b)).join(''); }
+      const preview = txt.length > 200 ? txt.slice(0,200) + '…' : txt;
+      assets.strings.push({name: l.name, index: l.index, size: l.size, text: txt, preview, type:'strings'});
+    }
+  }
 
   // ── Patch decoder ──────────────────────────────────────────────────────
   function readPatch(name,lump){
@@ -902,13 +960,14 @@ async function loadWad(file) {
     <div class="stat"><div class="val">${assets.images.length}</div><div class="lbl">Images</div></div>
     <div class="stat"><div class="val">${assets.sounds.length}</div><div class="lbl">Sounds</div></div>
     <div class="stat"><div class="val">${assets.music.length}</div><div class="lbl">Music</div></div>
+    <div class="stat"><div class="val">${assets.strings.length}</div><div class="lbl">Strings</div></div>
     <div class="stat"><div class="val">${numLumps}</div><div class="lbl">Lumps</div></div>
     <div class="stat"><div class="val">${fmtSize(file.size)}</div><div class="lbl">WAD Size</div></div>
   `;
 
   renderGrid('textures'); renderSprites(null,'');
   renderGrid('flats'); renderGrid('images',true);
-  renderSounds(assets.sounds); renderMusic(); renderDLRows();
+  renderSounds(assets.sounds); renderMusic(); renderStrings(); renderDLRows();
 
   setP(100,'Done!','');
   // reset timer start for next run
@@ -1046,6 +1105,80 @@ function filterSounds(q){renderSounds(q?assets.sounds.filter(s=>s.name.toLowerCa
 function sortSounds(by){
   renderSounds([...assets.sounds].sort((a,b)=>by==='name'?a.name.localeCompare(b.name):by==='size'?b.size-a.size:b.dur-a.dur));
 }
+
+// ── Strings panel (text lump preview & download) ─────────────────────────
+function renderStrings(){
+  const container = $('stringsList');
+  container.innerHTML = '';
+  if(!assets.strings || assets.strings.length===0){ container.innerHTML = '<div class="empty">No printable strings found.</div>'; return; }
+  for(const s of assets.strings){
+    const row = document.createElement('div');
+    row.style.display='flex'; row.style.alignItems='center'; row.style.justifyContent='space-between'; row.style.gap='.6rem';
+    row.style.padding='.5rem'; row.style.border='1px solid var(--border)'; row.style.borderRadius='6px'; row.style.background='var(--surface)';
+    row.innerHTML = `<div style="flex:1;min-width:0">
+        <div style="font-weight:700;color:#ddd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</div>
+        <div style="font-size:.78rem;color:var(--muted);margin-top:.25rem">${s.preview.replace(/\n/g,'␤')}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:.3rem;align-items:flex-end">
+        <div style="font-size:.72rem;color:var(--muted)">${fmtSize(s.size)}</div>
+        <div style="display:flex;gap:.4rem">
+          <button class="btn btn-sm btn-gray" onclick='downloadString("${s.name.replace(/"/g,'\\"')}")'>⬇ TXT</button>
+          <button class="btn btn-sm btn-gray" onclick='openString("${s.name.replace(/"/g,'\\"')}")'>Preview</button>
+        </div>
+      </div>`;
+    container.appendChild(row);
+  }
+}
+function filterStrings(q){
+  const list = q ? assets.strings.filter(s=>s.name.toLowerCase().includes(q.toLowerCase()) || s.preview.toLowerCase().includes(q.toLowerCase())) : assets.strings;
+  $('stringsList').innerHTML = '';
+  for(const s of list){
+    const el = document.createElement('div');
+    el.style.padding='.4rem';
+    el.style.border='1px solid var(--border)';
+    el.style.borderRadius='6px';
+    el.style.background='var(--surface)';
+    el.innerHTML = `<div style="font-weight:700;color:#ddd">${s.name}</div><div style="font-size:.78rem;color:var(--muted)">${s.preview.replace(/\n/g,'␤')}</div>
+      <div style="margin-top:.4rem"><button class="btn btn-sm btn-gray" onclick='downloadString("${s.name.replace(/"/g,'\\"')}")'>⬇ TXT</button> <button class="btn btn-sm btn-gray" onclick='openString("${s.name.replace(/"/g,'\\"')}")'>Preview</button></div>`;
+    $('stringsList').appendChild(el);
+  }
+}
+/* open a modal preview for a string lump: create a properly constrained, scrollable text area
+   and ensure modal canvas is hidden to prevent layout overflow. */
+function openString(name){
+  const s = assets.strings.find(x=>x.name===name);
+  if(!s) return;
+  // Title / meta / buttons
+  $('modalTitle').textContent = s.name;
+  $('modalMeta').textContent = `${fmtSize(s.size)} · ${fmtDate(new Date())}`;
+  const btns = document.getElementById('modalBtns');
+  btns.innerHTML = `<button class="btn btn-sm btn-red" onclick="downloadString('${s.name.replace(/'/g,"\\'")}')">⬇ TXT</button>`;
+
+  // Ensure any previous modalText is removed, and hide canvas when showing text
+  const existing = document.getElementById('modalText');
+  if (existing) existing.remove();
+  const mc = $('modalCanvas');
+  mc.width = 0; mc.height = 0;
+  mc.style.display = 'none';
+
+  // Create scrollable <pre> element (kept in DOM for consistent sizing)
+  const pre = document.createElement('pre');
+  pre.id = 'modalText';
+  pre.textContent = s.text || s.preview || '';
+  // style via CSS rule (#modalText) added above; ensure accessible focus
+  // Append into the asset modal specifically (there are multiple .modal elements on the page)
+  document.getElementById('assetModal').querySelector('.modal').appendChild(pre);
+
+  // show modal
+  document.getElementById('assetModal').classList.add('show');
+}
+// download string as .txt
+function downloadString(name){
+  const s = assets.strings.find(x=>x.name===name);
+  if(!s) return;
+  const blob = new Blob([s.text || s.preview || ''], {type:'text/plain;charset=utf-8'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${s.name}.txt`; a.click(); URL.revokeObjectURL(a.href);
+}
 function drawWaveform(canvas,samples){
   const W=canvas.offsetWidth||200,H=32; canvas.width=W; canvas.height=H;
   const ctx=canvas.getContext('2d'); ctx.clearRect(0,0,W,H);
@@ -1104,13 +1237,14 @@ function renderMusic(){
 function renderDLRows(){
   // Add a top-level "Everything" batch row and then per-category rows (matching style of "All Textures — PNG" entries)
   const rows = [
-    {label:'Everything — ZIP All Assets', action: 'all', cnt: (assets.textures.length + assets.sprites.length + assets.flats.length + assets.images.length + assets.sounds.length + assets.music.length), cls:'btn-green'},
+    {label:'Everything — ZIP All Assets', action: 'all', cnt: (assets.textures.length + assets.sprites.length + assets.flats.length + assets.images.length + assets.sounds.length + assets.music.length + assets.strings.length), cls:'btn-green'},
     {label:'All Textures — PNG', action:'textures', cnt:assets.textures.length, cls:'btn-red'},
     {label:'All Sprites — PNG', action:'sprites', cnt:assets.sprites.length, cls:'btn-red'},
     {label:'All Flats — PNG', action:'flats', cnt:assets.flats.length, cls:'btn-red'},
     {label:'All Graphics — PNG', action:'images', cnt:assets.images.length, cls:'btn-red'},
     {label:'All Sounds — WAV', action:'sounds', cnt:assets.sounds.length, cls:'btn-gray'},
     {label:'All Music — WAV', action:'music', cnt:assets.music.length, cls:'btn-gray'},
+    {label:'All Strings — TXT', action:'strings', cnt:assets.strings.length, cls:'btn-gray'},
   ];
 
   // Build HTML, wiring the Everything button to zipAll() and the others to zipAssets(action)
@@ -1133,6 +1267,8 @@ async function zipAssets(type){
     for(const s of assets.sounds) folder.file(s.name+'.wav', buildWav(s));
   } else if(type==='music'){
     for(const m of assets.music) folder.file(m.name+'.wav', m.wavBuf);
+  } else if(type==='strings'){
+    for(const st of assets.strings) folder.file(st.name+'.txt', (st.text||st.preview||''), {binary:false});
   } else {
     for(const a of assets[type]) folder.file(a.name+'.png', a.canvas.toDataURL('image/png').split(',')[1], {base64:true});
   }
@@ -1150,6 +1286,7 @@ async function zipAll(){
     {key:'images',    label:'graphics',   maker: async (z)=>{ for(const a of assets.images) z.file(a.name + '.png', a.canvas.toDataURL('image/png').split(',')[1], {base64:true}); }},
     {key:'sounds',    label:'sounds',     maker: async (z)=>{ for(const s of assets.sounds) z.file(s.name + '.wav', buildWav(s)); }},
     {key:'music',     label:'music',      maker: async (z)=>{ for(const m of assets.music) z.file(m.name + '.wav', m.wavBuf); }},
+    {key:'strings',   label:'strings',    maker: async (z)=>{ for(const st of assets.strings) z.file(st.name + '.txt', (st.text||st.preview||'')); }},
   ];
 
   // Helper: build a zip for one category and return blob while emitting progress via setP
@@ -1230,17 +1367,22 @@ async function zipAll(){
 
 // ── Modal ──────────────────────────────────────────────────────────────────
 function openModal(a){
-  modalAsset=a;
-  $('modalTitle').textContent=a.name+(a.label&&a.label!==a.prefix?' — '+a.label:'');
-  const mc=$('modalCanvas');
-  const maxW=Math.min(window.innerWidth*.85,720);
-  const s=Math.max(1,Math.min(6,Math.floor(maxW/a.w),Math.floor(560/a.h)));
-  mc.width=a.w*s; mc.height=a.h*s;
-  const ctx=mc.getContext('2d');ctx.imageSmoothingEnabled=false;
-  ctx.drawImage(a.canvas,0,0,mc.width,mc.height);
-  $('modalMeta').innerHTML=`${a.w} × ${a.h} px · ${fmtSize(a.size)} · Preview ${s}× · ${fmtDate(new Date())}${a.frame?' · Frame: '+a.frame:''}${a.cat?' · Category: '+a.cat:''}`;
-  $('modalBtns').innerHTML=`<button class="btn btn-sm btn-red" onclick="downloadModalPng()">⬇ PNG</button>`;
-  $('assetModal').classList.add('show');
+  modalAsset = a;
+  // Remove any text preview that might be present and ensure canvas is visible
+  const existing = document.getElementById('modalText');
+  if (existing) existing.remove();
+  const mc = $('modalCanvas');
+  mc.style.display = ''; // show canvas
+  $('modalTitle').textContent = a.name + (a.label && a.label !== a.prefix ? ' — ' + a.label : '');
+  const maxW = Math.min(window.innerWidth * .85, 720);
+  const s = Math.max(1, Math.min(6, Math.floor(maxW / a.w || 1), Math.floor(560 / a.h || 1)));
+  mc.width = a.w * s; mc.height = a.h * s;
+  const ctx = mc.getContext('2d'); ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0,0,mc.width,mc.height);
+  ctx.drawImage(a.canvas, 0, 0, mc.width, mc.height);
+  $('modalMeta').innerHTML = `${a.w} × ${a.h} px · ${fmtSize(a.size)} · Preview ${s}× · ${fmtDate(new Date())}${a.frame ? ' · Frame: ' + a.frame : ''}${a.cat ? ' · Category: ' + a.cat : ''}`;
+  $('modalBtns').innerHTML = `<button class="btn btn-sm btn-red" onclick="downloadModalPng()">⬇ PNG</button>`;
+  document.getElementById('assetModal').classList.add('show');
 }
 function downloadModalPng(){
   if(!modalAsset) return;
