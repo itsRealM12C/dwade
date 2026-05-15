@@ -1,0 +1,1603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DOOM WAD Extractor</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:var(--body-bg);color:var(--text);min-height:100vh; -webkit-tap-highlight-color: rgba(255, 255, 255, 0);}
+:root{--accent:#1e90ff;--red:#0ea5ff;--green:#27ae60;--surface:#161616;--surface2:#1e1e1e;--border:#2a2a2a;--muted:#666;--body-bg:#111;--text:#ddd;--header-from:#0b1b2b;--header-to:#07121a}
+header{background:linear-gradient(90deg,var(--header-from),var(--header-to));border-bottom:2px solid var(--red);padding:1.2rem 2rem;display:flex;align-items:center;gap:1rem}
+header h1{font-size:1.5rem;font-weight:800;color:#fff;letter-spacing:2px;text-transform:uppercase}
+.subtitle{color:var(--muted);font-size:.78rem;margin-top:.2rem;letter-spacing:1px}
+.drop-zone{margin:1.5rem 2rem;border:2px dashed #333;border-radius:10px;padding:2.5rem;text-align:center;cursor:pointer;transition:.2s;background:var(--surface)}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--red);background:#150000}
+.drop-zone.loaded{border-color:var(--green);border-style:solid;padding:.9rem 2rem}
+.drop-zone p{color:var(--muted);margin-bottom:.9rem}
+#file-input{display:none}
+.btn{display:inline-flex;align-items:center;gap:.4rem;padding:.5rem 1rem;border-radius:5px;border:none;cursor:pointer;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;transition:.15s}
+.btn-red{background:var(--red);color:#fff}.btn-red:hover{background:#a93226}
+.btn-green{background:var(--green);color:#fff}.btn-green:hover{background:#219a52}
+.btn-gray{background:#222;color:#aaa;border:1px solid #333}.btn-gray:hover{background:#2a2a2a}
+.btn-sm{padding:.33rem .7rem;font-size:.7rem}
+.progress-wrap{margin:0 2rem 1rem;padding:1.2rem 1.5rem;background:var(--surface);border-radius:8px;border:1px solid var(--border);display:none}
+.progress-wrap.show{display:block}
+.pbar{height:5px;background:#1a1a1a;border-radius:3px;overflow:hidden;margin:.6rem 0}
+.pfill{height:100%;background:var(--accent);border-radius:3px;transition:width .1s;width:0%}
+.plog{font-size:.72rem;color:var(--muted)}
+.stats-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(85px,1fr));gap:.5rem;margin:0 2rem 1.2rem;padding:.7rem 1rem;background:var(--surface);border-radius:8px;border:1px solid var(--border)}
+.stat{text-align:center}.stat .val{font-size:1.2rem;font-weight:700;color:var(--accent)}.stat .lbl{font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:.1rem}
+.tabs{display:flex;margin:0 2rem;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:.55rem 1rem;cursor:pointer;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;transition:.15s}
+.tab.active{color:#fff;border-bottom-color:var(--red)}
+.tab:hover:not(.active){color:#bbb}
+.panel{display:none;padding:1.2rem 2rem}.panel.active{display:block}
+.toolbar{display:flex;align-items:center;gap:.55rem;margin-bottom:1rem;flex-wrap:wrap}
+.search-box{flex:1;min-width:140px;padding:.42rem .65rem;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:#ddd;font-size:.8rem;outline:none}
+.search-box:focus{border-color:#444}
+select{background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:#ddd;padding:.42rem .65rem;font-size:.78rem;outline:none;cursor:pointer}
+/* GRID */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:.5rem}
+.grid-wide{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.6rem}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:7px;overflow:hidden;cursor:pointer;transition:.15s}
+.card:hover{border-color:#555;transform:translateY(-2px)}
+.canvas-wrap{background:repeating-conic-gradient(#141414 0% 25%,#0e0e0e 0% 50%) 0 0/12px 12px;display:flex;align-items:center;justify-content:center;min-height:65px}
+.canvas-wrap canvas{display:block;image-rendering:pixelated;max-width:100%;max-height:100px}
+.card-info{padding:.3rem .45rem}
+.card-info .name{font-size:.64rem;font-weight:700;color:#ccc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-info .dims{font-size:.58rem;color:var(--muted)}
+/* Sprite groups */
+.sprite-group{margin-bottom:1.2rem}
+.sprite-group-title{font-size:.7rem;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;padding-bottom:.3rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.5rem}
+.sprite-group-title span{color:#1e90ff;font-size:.65rem}
+.sprite-frames{display:flex;flex-wrap:wrap;gap:.4rem}
+.frame-card{background:var(--surface);border:1px solid var(--border);border-radius:5px;overflow:hidden;cursor:pointer;transition:.15s;min-width:60px;text-align:center}
+.frame-card:hover{border-color:#555;transform:translateY(-1px)}
+.frame-card canvas{display:block;image-rendering:pixelated}
+.frame-card .fname{font-size:.55rem;color:var(--muted);padding:.2rem .3rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* SOUNDS */
+.sound-list{display:flex;flex-direction:column;gap:.4rem}
+.sound-row{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:.5rem .85rem;display:flex;align-items:center;gap:.6rem}
+.sound-row:hover{border-color:#444}
+.sname{font-size:.78rem;font-weight:700;color:#ccc;min-width:110px;letter-spacing:.3px}
+.wave-canvas{flex:1;height:32px;border-radius:4px;background:#080808;cursor:pointer}
+.sound-meta{font-size:.62rem;color:var(--muted);min-width:78px;text-align:right;line-height:1.65}
+.play-btn{width:28px;height:28px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.65rem;flex-shrink:0;transition:.15s}
+.play-btn.idle{background:#252525;color:#888}.play-btn.idle:hover{background:#333}
+.play-btn.playing{background:var(--accent);color:#fff;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(30,144,255,.5)}50%{box-shadow:0 0 0 6px rgba(30,144,255,0)}}
+.dl-btn{width:24px;height:24px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.62rem;flex-shrink:0}
+.dl-btn:hover{border-color:#555;color:#ccc;background:#1e1e1e}
+/* MUSIC */
+.music-list{display:flex;flex-direction:column;gap:.5rem}
+.music-row{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:.6rem 1rem;display:flex;align-items:center;gap:.7rem}
+.music-row:hover{border-color:#444}
+.music-icon{font-size:1.3rem;flex-shrink:0}
+.music-info{flex:1}.music-info .name{font-size:.85rem;font-weight:700;color:#ccc}.music-info .meta{font-size:.63rem;color:var(--muted);margin-top:.1rem}
+audio{height:26px;outline:none;flex:1;min-width:130px;filter:brightness(.85) sepia(30%)}
+/* DOWNLOADS */
+.dl-section{padding:1.2rem;background:var(--surface);border-radius:8px;border:1px solid var(--border);margin-bottom:.8rem}
+.dl-section h3{font-size:.7rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:.7rem}
+.dl-row{display:flex;align-items:center;justify-content:space-between;padding:.55rem 0;border-bottom:1px solid var(--border)}
+.dl-row:last-child{border-bottom:none}
+.dl-info h4{font-size:.85rem;font-weight:600;margin-bottom:.12rem}.dl-info p{font-size:.67rem;color:var(--muted)}
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:1000;display:none;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:#141414;border:1px solid #333;border-radius:10px;max-width:90vw;max-height:90vh;overflow:auto;padding:1.2rem;min-width:250px}
+.modal canvas{image-rendering:pixelated;display:block;max-width:100%}
+.modal-title{font-size:.9rem;font-weight:700;color:#fff;margin-bottom:.7rem;letter-spacing:1px}
+.modal-meta{font-size:.68rem;color:var(--muted);margin-top:.5rem;line-height:1.7}
+.modal-close{float:right;background:none;border:none;color:#555;cursor:pointer;font-size:1rem;padding:.1rem;margin-left:.5rem}
+.modal-close:hover{color:#fff}
+.empty{text-align:center;padding:2rem;color:var(--muted);font-size:.8rem}
+.tag{display:inline-block;padding:.1rem .4rem;border-radius:3px;font-size:.6rem;font-weight:700;text-transform:uppercase}
+.tag-red{background:#08101a;color:#3498db;border:1px solid #082040}
+.tag-green{background:#081a08;color:#2ecc71;border:1px solid #082a08}
+.tag-blue{background:#08101a;color:#3498db;border:1px solid #082040}
+.tag-purple{background:#120820;color:#9b59b6;border:1px solid #1a0a30}
+.tag-teal{background:#081a15;color:#1abc9c;border:1px solid #0a2820}
+.tag-orange{background:#1a1008;color:#e67e22;border:1px solid #2a1500}
+.loaded-info{display:flex;align-items:center;gap:1rem;justify-content:center;flex-wrap:wrap}
+.loaded-info span{font-size:.8rem;color:#999}.loaded-info strong{color:#fff}
+/* Sprite labels */
+.sprite-label{display:inline-block;padding:.15rem .45rem;border-radius:3px;font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.lbl-enemy{background:#2a0800;color:#ff6633;border:1px solid #4a1000}
+.lbl-player{background:#00082a;color:#3399ff;border:1px solid #00154a}
+.lbl-weapon{background:#1a0028;color:#cc66ff;border:1px solid #2a0040}
+.lbl-item{background:#002800;color:#33ff66;border:1px solid #004a10}
+.lbl-projectile{background:#28280000;color:#ffcc00;border:1px solid #4a4a00}
+.lbl-effect{background:#002828;color:#00ffff;border:1px solid #004a4a}
+.lbl-decor{background:#1a1a00;color:#cccc44;border:1px solid #2a2a00}
+/* Light-mode overrides (applied via .light-mode on <html>) */
+  .light-mode .btn {
+    background: #ffffff !important;
+    color: #000000 !important;
+    border-color: #dcdcdc !important;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+  }
+  .light-mode .btn.btn-gray {
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: 1px solid #d0d0d0 !important;
+  }
+  .light-mode .btn.btn-red { color:#000; background:#ffecec; border-color:#f3c0c0 }
+  .light-mode .btn.btn-green { color:#000; background:#ecffec; border-color:#cfeccf }
+  .light-mode header {
+    background: linear-gradient(90deg, var(--header-from), var(--header-to));
+    border-bottom-color: #e5e5e5 !important;
+  }
+  .light-mode body { background: var(--body-bg) !important; color: var(--text) !important; }
+  .light-mode .drop-zone { background: var(--surface) !important; border-color:#d9d9d9 !important; color: #111; }
+  .light-mode .drop-zone.loaded { background: #fff !important; border-color: #9fd5a3 !important; color: #111 !important; }
+  .light-mode .modal { background: #ffffff !important; color: #111 !important; border-color: #ddd !important; }
+  .light-mode .card { background: #fbfbfb !important; border-color:#e6e6e6 !important; color:#111; }
+  .light-mode .canvas-wrap { background: repeating-conic-gradient(#f6f6f6 0% 25%, #ffffff 0% 50%) 0 0/12px 12px !important; }
+  .light-mode .sound-row, .light-mode .music-row, .light-mode .dl-section, .light-mode .progress-wrap, .light-mode .stats-bar, .light-mode .panel {
+    background: #ffffff !important; color:#111 !important; border-color:#e9e9e9 !important;
+  }
+  .light-mode .subtitle { color:#333 !important; }
+  .light-mode .tag { color:#333 !important; }
+  .light-mode .loaded-info span { color:#111 !important; } /* ensure uploaded filename and metadata are visible in light mode */
+  /* ensure header titles are visible */
+  .light-mode header h1, .light-mode header .subtitle { color: #000 !important; }
+
+  /* Settings button color override:
+     - Dark mode (default): show the settings button inverted (white bg, black text).
+     - Light mode: switch to black bg with white text for contrast.
+     - Rules are scoped explicitly so theme application is deterministic.
+  */
+  /* Dark-mode (default) settings button: inverted white button with black text */
+  :root:not(.light-mode) #settingsBtn {
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: 1px solid #dcdcdc !important;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+  }
+  /* Prevent the settings SVG from rotating or being transformed when the button is pressed/focused.
+     Ensure icon inherits currentColor so it inverts with the button text. */
+  #settingsBtn svg { transform-origin: 50% 50%; transition: none !important; will-change: transform; color: currentColor; }
+  /* Ensure any active/focus state does not apply transforms to the icon or the button */
+  #settingsBtn:active svg,
+  #settingsBtn:focus svg,
+  #settingsBtn:active,
+  #settingsBtn:focus {
+    transform: none !important;
+  }
+  /* Light-mode override: dark button with white text */
+  .light-mode #settingsBtn {
+    background: #000000 !important;
+    color: #ffffff !important;
+    border-color: #222 !important;
+    box-shadow: none;
+  }
+
+  /* Modernized range style for GUI scale */
+  input[type="range"]{
+    -webkit-appearance:none;
+    width:220px;
+    height:10px;
+    background:linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+    border-radius:999px;
+    outline:none;
+    margin-top:6px;
+  }
+  input[type="range"]::-webkit-slider-runnable-track{
+    height:10px;border-radius:999px;background:linear-gradient(90deg,var(--accent),#6ad0ff);
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid var(--accent);margin-top:-4px;box-shadow:0 2px 6px rgba(0,0,0,0.35);
+  }
+  input[type="range"]::-moz-range-track{ height:10px;border-radius:999px;background:linear-gradient(90deg,var(--accent),#6ad0ff); }
+  input[type="range"]::-moz-range-thumb{ width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid var(--accent);box-shadow:0 2px 6px rgba(0,0,0,0.35); }
+  input[type="range"]:focus { box-shadow:0 0 0 6px rgba(30,144,255,0.06); }
+</style>
+</head>
+<body>
+<header>
+  <img id="doomLogo" src="/d.png" width="36" height="36" alt="d.oom logo" style="display:block;object-fit:contain;"/>
+  <div style="flex:1">
+    <h1>DOOM WAD Extractor</h1>
+    <div class="subtitle">Textures · Sprites · Flats · Images · Sounds · Music (MUS→WAV) — All assets decoded client-side</div>
+  </div>
+  <button id="settingsBtn" class="btn btn-sm btn-gray" title="Settings" aria-label="Settings" style="display:flex;align-items:center;gap:.4rem">
+    <svg id="settingsIcon" width="20" height="20" viewBox="-51.2 -51.2 614.40 614.40" xmlns="http://www.w3.org/2000/svg" fill="none" aria-hidden="true" focusable="false" style="transform-origin:center;will-change:transform;color:currentColor;"><g id="SVGRepo_bgCarrier" stroke-width="0" transform="translate(240.64,240.64), scale(0.06)"><rect x="-51.2" y="-51.2" width="614.40" height="614.40" rx="307.2" fill="none" strokewidth="0"></rect></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" stroke-width="1.024"></g><g id="SVGRepo_iconCarrier"><title>ionicons-v5-q</title><path d="M262.29,192.31a64,64,0,1,0,57.4,57.4A64.13,64.13,0,0,0,262.29,192.31ZM416.39,256a154.34,154.34,0,0,1-1.53,20.79l45.21,35.46A10.81,10.81,0,0,1,462.52,326l-42.77,74a10.81,10.81,0,0,1-13.14,4.59l-44.9-18.08a16.11,16.11,0,0,0-15.17,1.75A164.48,164.48,0,0,1,325,400.8a15.94,15.94,0,0,0-8.82,12.14l-6.73,47.89A11.08,11.08,0,0,1,298.77,470H213.23a11.11,11.11,0,0,1-10.69-8.87l-6.72-47.82a16.07,16.07,0,0,0-9-12.22,155.3,155.3,0,0,1-21.46-12.57,16,16,0,0,0-15.11-1.71l-44.89,18.07a10.81,10.81,0,0,1-13.14-4.58l-42.77-74a10.8,10.8,0,0,1,2.45-13.75l38.21-30a16.05,16.05,0,0,0,6-14.08c-.36-4.17-.58-8.33-.58-12.5s.21-8.27.58-12.35a16,16,0,0,0-6.07-13.94l-38.19-30A10.81,10.81,0,0,1,49.48,186l42.77-74a10.81,10.81,0,0,1,13.14-4.59l44.9,18.08a16.11,16.11,0,0,0,15.17-1.75A164.48,164.48,0,0,1,187,111.2a15.94,15.94,0,0,0,8.82-12.14l6.73-47.89A11.08,11.08,0,0,1,213.23,42h85.54a11.11,11.11,0,0,1,10.69,8.87l6.72,47.82a16.07,16.07,0,0,0,9,12.22,155.3,155.3,0,0,1,21.46,12.57,16,16,0,0,0,15.11,1.71l44.89-18.07a10.81,10.81,0,0,1,13.14,4.58l42.77,74a10.8,10.8,0,0,1-2.45,13.75l-38.21,30a16.05,16.05,0,0,0-6.05,14.08C416.17,247.67,416.39,251.83,416.39,256Z" style="fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:32px"></path></g></svg>
+    <span style="font-size:.82rem;font-weight:700">Settings</span>
+  </button>
+</header>
+
+<!-- Quick settings modal -->
+<div id="quickSettings" class="modal-overlay" onclick="closeSettings()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:420px">
+    <button class="modal-close" onclick="closeSettings()">✕</button>
+    <div class="modal-title">Settings</div>
+    <div style="display:flex;flex-direction:column;gap:.6rem">
+      <label style="display:flex;align-items:center;justify-content:space-between;gap:.6rem">
+        <div>
+          <div style="font-weight:700">Display mode</div>
+          <div class="modal-meta" style="margin-top:4px">D = Dark / L = Light (quick toggle)</div>
+        </div>
+        <div>
+          <button id="dlToggle" class="btn btn-sm btn-gray" style="min-width:72px">Toggle</button>
+        </div>
+      </label>
+
+      <label style="display:flex;flex-direction:column;gap:.25rem">
+        <div style="font-weight:700">GUI scale <span id="scaleVal" style="font-weight:600;color:var(--muted)">1.0×</span></div>
+        <input id="guiScale" type="range" min="0.8" max="1.6" step="0.05" value="1" />
+        <div class="modal-meta">Adjust overall UI scale for spacing and readability.</div>
+      </label>
+
+      <label style="display:flex;align-items:center;justify-content:space-between;gap:.6rem">
+        <div>
+          <div style="font-weight:700">Language</div>
+          <div class="modal-meta" style="margin-top:4px">Interface language (affects labels where available)</div>
+        </div>
+        <select id="langSelect" style="background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:.3rem">
+          <option value="en">English</option>
+          <option value="es">Español</option>
+          <option value="fr">Français</option>
+          <option value="de">Deutsch</option>
+          <option value="pt">Português</option>
+        </select>
+      </label>
+
+      <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.4rem">
+        <button class="btn btn-sm btn-gray" onclick="resetSettings()">Reset to defaults</button>
+        <button class="btn btn-sm btn-green" onclick="saveSettings();closeSettings()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="drop-zone" id="dropZone">
+  <!-- upload / tray SVG (rounded arrow + tray) -->
+  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org" style="margin-bottom:.7rem" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Rounded Arrow -->
+    <path d="M12 15V3M12 3L8.5 6.5M12 3L15.5 6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Modern Rounded Tray -->
+    <path d="M4 14V17C4 19.2091 5.79086 21 8 21H16C18.2091 21 20 19.2091 20 17V14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <p>Drop <strong>DOOM1.WAD</strong> (or any IWAD/PWAD) here</p>
+</div>
+<!-- keep file input outside the drop-zone so it isn't removed when drop-zone content is rewritten -->
+<input type="file" id="file-input" accept=".wad,.WAD" style="display:none">
+
+<div class="progress-wrap" id="progressWrap" aria-live="polite" role="status">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:.6rem">
+    <div style="display:flex;align-items:center;gap:.6rem">
+      <strong id="progressLabel">Parsing WAD…</strong>
+      <div id="progressPercent" style="font-weight:700;color:var(--accent);margin-left:.5rem">0%</div>
+      <div id="lastExtracted" style="margin-left:12px;font-size:.78rem;color:var(--muted)">Last: —</div>
+    </div>
+    <div style="display:flex;gap:.6rem;align-items:center">
+      <div class="tag-blue" id="progressMode" style="font-size:.68rem">Extracting</div>
+      <div style="font-size:.72rem;color:var(--muted)" id="progressTimer">00:00</div>
+    </div>
+  </div>
+  <div class="pbar" aria-hidden="true"><div class="pfill" id="progressFill"></div></div>
+  <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;margin-top:.5rem">
+    <div class="plog" id="progressLog" style="flex:2">Starting…</div>
+    <div style="font-size:.72rem;color:var(--muted)">Files: <strong id="filesExtracted">0</strong></div>
+    <div style="font-size:.72rem;color:var(--muted)">Size: <strong id="extractedSize">0B</strong></div>
+  </div>
+</div>
+
+<div id="mainUI" style="display:none">
+  <div class="stats-bar" id="statsBar"></div>
+  <div class="tabs" id="tabBar">
+    <div class="tab active" data-panel="textures"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Textures</div>
+    <div class="tab" data-panel="sprites"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>Sprites</div>
+    <div class="tab" data-panel="flats"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>Flats</div>
+    <div class="tab" data-panel="images"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Graphics</div>
+    <div class="tab" data-panel="sounds"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>Sounds</div>
+    <div class="tab" data-panel="music"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>Music</div>
+    <div class="tab" data-panel="downloads"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Downloads</div>
+  </div>
+
+  <!-- TEXTURES -->
+  <div class="panel active" id="panel-textures">
+    <div class="toolbar">
+      <input class="search-box" placeholder="Search textures…" oninput="filterAssets('textures',this.value)">
+      <select onchange="sortAssets('textures',this.value)"><option value="name">Name</option><option value="width">Width</option><option value="height">Height</option></select>
+      <button class="btn btn-sm btn-gray" onclick="zipAssets('textures')">⬇ ZIP All PNG</button>
+    </div>
+    <div class="grid" id="grid-textures"></div>
+  </div>
+
+  <!-- SPRITES grouped by entity -->
+  <div class="panel" id="panel-sprites">
+    <div class="toolbar">
+      <input class="search-box" placeholder="Filter sprites… (TROO, POSS, SARG…)" oninput="filterSprites(this.value)" id="spriteSearch">
+      <select id="spriteCat" onchange="filterSprites(document.getElementById('spriteSearch').value)">
+        <option value="">All Categories</option>
+        <option value="enemy">Enemies</option>
+        <option value="player">Player</option>
+        <option value="weapon">Weapons</option>
+        <option value="item">Items / Pickups</option>
+        <option value="projectile">Projectiles</option>
+        <option value="effect">Effects / Gore</option>
+        <option value="decor">Decorations</option>
+      </select>
+      <button class="btn btn-sm btn-gray" onclick="zipAssets('sprites')">⬇ ZIP All PNG</button>
+    </div>
+    <div id="spriteGroups"></div>
+  </div>
+
+  <!-- FLATS -->
+  <div class="panel" id="panel-flats">
+    <div class="toolbar">
+      <input class="search-box" placeholder="Search flats…" oninput="filterAssets('flats',this.value)">
+      <select onchange="sortAssets('flats',this.value)"><option value="name">Name</option></select>
+      <button class="btn btn-sm btn-gray" onclick="zipAssets('flats')">⬇ ZIP All PNG</button>
+    </div>
+    <div class="grid" id="grid-flats"></div>
+  </div>
+
+  <!-- FULL-SCREEN IMAGES -->
+  <div class="panel" id="panel-images">
+    <div class="toolbar">
+      <button class="btn btn-sm btn-gray" onclick="zipAssets('images')">⬇ ZIP All PNG</button>
+    </div>
+    <div class="grid-wide" id="grid-images"></div>
+  </div>
+
+  <!-- SOUNDS -->
+  <div class="panel" id="panel-sounds">
+    <div class="toolbar">
+      <input class="search-box" placeholder="Search sounds…" oninput="filterSounds(this.value)">
+      <select onchange="sortSounds(this.value)"><option value="name">Name</option><option value="size">Size</option><option value="dur">Duration</option></select>
+      <button class="btn btn-sm btn-gray" onclick="zipAssets('sounds')">⬇ ZIP All WAV</button>
+    </div>
+    <div class="sound-list" id="soundList"></div>
+  </div>
+
+  <!-- MUSIC -->
+  <div class="panel" id="panel-music">
+    <div class="toolbar">
+      <span style="font-size:.72rem;color:var(--muted)">MUS format → WAV synthesized · playable in browser</span>
+      <button class="btn btn-sm btn-gray" style="margin-left:auto" onclick="zipAssets('music')">⬇ ZIP All WAV</button>
+    </div>
+    <div class="music-list" id="musicList"></div>
+  </div>
+
+  <!-- DOWNLOADS -->
+  <div class="panel" id="panel-downloads">
+    <div class="dl-section"><h3>Batch Downloads</h3><div id="dlRows"></div></div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="assetModal" onclick="this.classList.remove('show')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <button class="modal-close" onclick="document.getElementById('assetModal').classList.remove('show')">✕</button>
+    <div class="modal-title" id="modalTitle"></div>
+    <canvas id="modalCanvas"></canvas>
+    <div class="modal-meta" id="modalMeta"></div>
+    <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap" id="modalBtns"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+
+
+// ── Sprite categorization ──────────────────────────────────────────────────
+const SPRITE_CATS = {
+  enemy:      ['TROO','POSS','SPOS','SARG','BOSS','HEAD','SKUL','PAIN','BSPI','CYBR','SPID','FATT','SKEL','MANG','VILE','KEEN','BBRN'],
+  player:     ['PLAY'],
+  weapon:     ['PISG','PISF','PUNG','SHTG','SHTF','CHGG','CHGF','MISG','SAWG','LAUN','MISF','PLSG','BFGG','BFGF'],
+  item:       ['BON1','BON2','MEDI','STIM','BPAK','SOUL','MEGA','PINS','SUIT','PMAP','PVIS','ARM1','ARM2','BKEY','RKEY','YKEY','BSKU','RSKU','YSKU','CLIP','AMMO','ROCK','CELL','CELP','SHEL','SBOX','BROK','MGUN','CSAW','SHOT','SGUN','LAUN','PLAS','BFUG','SYON'],
+  projectile: ['MISL','BAL1','BAL2','BAL3','BAL4','BAL5','BAL6','BAL7','MANF','FATB','SKUL','TRAC','RCKT','PLSS','PLSE','BFS1','BFE1','BFE2','APLS','APBX'],
+  effect:     ['PUFF','BLUD','TFOG','IFOG','BEXP','SMOK','MISL','MISF','PUFB'],
+  decor:      ['CEYE','FCAN','GOR1','GOR2','GOR3','GOR4','GOR5','POL1','POL2','POL3','POL4','POL5','POL6','COLU','ELEC','SMIT','FIRC','FIRE','CAND','CBRA','COLU','HDB1','HDB2','HDB3','HDB4','HDB5','HDB6','MAN2','TRED','BAR1','BEXP','DEADTREE','COL1','COL2','COL3','COL4','COL5','COL6','TLMP','TLP2','POL5','ROCK','BROK','SBOX'],
+};
+function getSpriteCategory(prefix) {
+  for (const [cat, prefixes] of Object.entries(SPRITE_CATS)) {
+    if (prefixes.includes(prefix)) return cat;
+  }
+  return 'decor';
+}
+const SPRITE_LABELS = {
+  TROO:'Imp', POSS:'Zombieman', SPOS:'Shotgun Guy', SARG:'Demon/Pinky',
+  BOSS:'Baron of Hell', HEAD:'Cacodemon', SKUL:'Lost Soul', PAIN:'Pain Elemental',
+  BSPI:'Arachnotron', CYBR:'Cyberdemon', SPID:'Spider Mastermind',
+  FATT:'Mancubus', SKEL:'Revenant', MANG:'Arch-Vile (Mancubus)', VILE:'Arch-Vile',
+  PLAY:'Doomguy', MISL:'Rocket', BAL1:'Imp Fireball', BAL7:'Baron Fireball',
+  PISG:'Pistol', SHTG:'Shotgun', CHGG:'Chaingun', MISG:'Rocket Launcher',
+  SAWG:'Chainsaw', LAUN:'Launcher', PUNG:'Fist',
+  MEDI:'Medikit', STIM:'Stimpak', BON1:'Health Bonus', BON2:'Armor Bonus',
+  SOUL:'Soul Sphere', ARM1:'Green Armor', ARM2:'Blue Armor',
+  BKEY:'Blue Key', RKEY:'Red Key', YKEY:'Yellow Key',
+  CLIP:'Ammo Clip', AMMO:'Ammo Box', SHEL:'Shells', SHOT:'Shotgun (pickup)',
+  PUFF:'Bullet Puff', BLUD:'Blood', TFOG:'Teleport Fog', BEXP:'Barrel Explosion',
+  BAR1:'Barrel', COLU:'Column', CAND:'Candle', CBRA:'Candelabra',
+  ELEC:'Tech Lamp', TRED:'Torch', BON1:'Health Bonus',
+};
+
+// ── MUS → WAV synthesizer ─────────────────────────────────────────────────
+// Standard equal-temperament frequencies, note 0 = C-1 (~8.18 Hz)
+const MUS_FREQ = new Float32Array(128);
+for (let i = 0; i < 128; i++) MUS_FREQ[i] = 8.1758 * Math.pow(2, i / 12);
+
+function patchToOscType(prog) {
+  if (prog < 8)  return 'sine';
+  if (prog < 24) return 'triangle';
+  if (prog < 32) return 'triangle';
+  if (prog < 56) return 'sawtooth';
+  if (prog < 80) return 'square';
+  if (prog < 96) return 'triangle';
+  return 'square';
+}
+
+function musToWav(mus) {
+  if (!mus || mus.length < 16) return null;
+  // MUS header
+  if (mus[0]!==0x4D||mus[1]!==0x55||mus[2]!==0x53||mus[3]!==0x1A) return null;
+  const scoreLen   = mus[4]  | (mus[5]  << 8);
+  const scoreStart = mus[6]  | (mus[7]  << 8);
+  if (scoreStart >= mus.length || scoreLen === 0) return null;
+
+  const SR = 22050;           // sample rate
+  const SPT = SR / 140.0;    // samples per MUS tick (140 Hz timer)
+
+  // ── Pass 1: parse MUS events into event list ──────────────────────────
+  // MUS event byte: bit7=last_event, bits6-4=type, bits3-0=channel
+  // types: 0=note off, 1=note on, 2=pitch, 3=tempo, 4=change ctrl, 5=score end, 6=measure end, 7=unused
+  const evts = []; // {tick, type:'on'|'off'|'prog', ch, note, vol, prog}
+  const chVol  = new Uint8Array(16).fill(100);
+  const chProg = new Uint8Array(16);
+  // MUS ch 15 = percussion -> render as noise; others are melodic
+  let pos = scoreStart;
+  let tick = 0;
+  const end = scoreStart + scoreLen;
+
+  try {
+    while (pos < end && pos < mus.length) {
+      const b    = mus[pos++];
+      const last = (b & 0x80) !== 0;   // bit 7: delay follows this event
+      const type = (b >> 4) & 0x07;    // bits 6-4
+      const ch   = b & 0x0F;           // bits 3-0
+
+      if (type === 0) {                 // Note OFF
+        const note = mus[pos++] & 0x7F;
+        evts.push({tick, type:'off', ch, note});
+      } else if (type === 1) {          // Note ON
+        const nb   = mus[pos++];
+        const note = nb & 0x7F;
+        if (nb & 0x80) chVol[ch] = mus[pos++] & 0x7F; // vol follows if bit7 set
+        evts.push({tick, type:'on', ch, note, vol:chVol[ch], prog:chProg[ch]});
+      } else if (type === 2) {          // Pitch wheel – skip
+        pos++;
+      } else if (type === 3) {          // System event – skip
+        pos++;
+      } else if (type === 4) {          // Controller
+        const ctrl = mus[pos++];
+        const val  = mus[pos++];
+        if (ctrl === 0) { chProg[ch] = val; }       // patch change
+        else if (ctrl === 3) { chVol[ch] = val; }   // volume
+      } else if (type === 5) {          // Score end
+        break;
+      } else {
+        // type 6 (measure end) or 7 – no extra bytes
+      }
+
+      if (last) {
+        // Read VLQ delay
+        let delay = 0;
+        let t;
+        do { t = mus[pos++]; delay = (delay << 7) | (t & 0x7F); } while (t & 0x80);
+        tick += delay;
+      }
+    }
+  } catch(e) { console.warn('MUS parse', e); }
+
+  if (evts.length === 0) return null;
+
+  // ── Pass 2: pair note-on/off and collect segments ─────────────────────
+  const segments = []; // {startTick, endTick, note, vol, prog, ch}
+  const active   = {}; // key `${ch}_${note}` -> {startTick, vol, prog}
+  let maxTick = 0;
+
+  for (const ev of evts) {
+    if (ev.tick > maxTick) maxTick = ev.tick;
+    const key = `${ev.ch}_${ev.note}`;
+    if (ev.type === 'on') {
+      // Close any existing note on this ch+note first
+      if (active[key]) {
+        segments.push({...active[key], endTick: ev.tick});
+        delete active[key];
+      }
+      active[key] = {startTick: ev.tick, note: ev.note, vol: ev.vol, prog: ev.prog, ch: ev.ch};
+    } else if (ev.type === 'off') {
+      if (active[key]) {
+        segments.push({...active[key], endTick: ev.tick});
+        delete active[key];
+      }
+    }
+  }
+  // close any still-open notes
+  for (const seg of Object.values(active)) {
+    segments.push({...seg, endTick: maxTick + 70});
+  }
+
+  if (segments.length === 0) return null;
+
+  // ── Pass 3: render segments into float PCM ────────────────────────────
+  const totalSamples = Math.ceil((maxTick + 280) * SPT) + SR; // +1s tail
+  const buf = new Float32Array(totalSamples);
+
+  for (const seg of segments) {
+    const note  = Math.max(0, Math.min(127, seg.note));
+    const freq  = MUS_FREQ[note];
+    const amp   = (seg.vol / 127) * (seg.ch === 15 ? 0.20 : 0.15);
+    const sStart = Math.floor(seg.startTick * SPT);
+    const sEnd   = Math.min(Math.floor(seg.endTick * SPT), totalSamples);
+    const dur    = sEnd - sStart;
+    if (dur <= 0 || sStart >= totalSamples) continue;
+
+    const attackS  = Math.max(1, Math.min(Math.floor(SR * 0.008), dur >> 2));
+    const releaseS = Math.max(1, Math.min(Math.floor(SR * 0.06),  dur >> 1));
+    const oscType  = patchToOscType(seg.prog);
+
+    for (let i = 0; i < dur; i++) {
+      const si = sStart + i;
+      if (si >= totalSamples) break;
+      const t  = i / SR;
+      const ph = 2 * Math.PI * freq * t;
+
+      let wave;
+      if (seg.ch === 15) {
+        // Percussion: decaying noise
+        wave = (Math.random() * 2 - 1) * Math.exp(-i / (SR * 0.05));
+      } else if (oscType === 'square') {
+        wave = (Math.sin(ph) >= 0 ? 1 : -1) * 0.7 + (Math.sin(ph*3) >= 0 ? 1 : -1) * 0.2 + (Math.sin(ph*5) >= 0 ? 1 : -1) * 0.1;
+      } else if (oscType === 'sawtooth') {
+        // Band-limited sawtooth: sum of harmonics
+        wave = 0;
+        for (let h = 1; h <= 8; h++) wave += Math.sin(ph * h) / h;
+        wave *= 0.9;
+      } else if (oscType === 'triangle') {
+        wave = Math.asin(Math.sin(ph)) * (2 / Math.PI);
+      } else {
+        // sine + 2nd+3rd harmonic
+        wave = Math.sin(ph) + Math.sin(ph*2)*0.12 + Math.sin(ph*3)*0.06;
+      }
+
+      // Apply distortion-guitar processing for melodic channels (not percussion)
+      if (seg.ch !== 15) {
+        // Mild pre-gain
+        let g = 4.0;
+        let d = wave * g;
+
+        // Soft clipping / distortion
+        // Use tanh for smooth saturation and add some harmonics for 'guitar' character
+        d = Math.tanh(d);
+
+        // Add subtle extra harmonic content (second/third harmonics) and a tiny bit of noise for realism
+        const harmonics = Math.sin(ph * 2) * 0.14 + Math.sin(ph * 3) * 0.06;
+        const grit = (Math.random() - 0.5) * 0.002;
+
+        // Blend distorted signal with original to keep clarity
+        wave = d * 0.92 + harmonics * 0.18 + grit;
+      }
+
+      // ADSR envelope
+      let env = 1.0;
+      if (i < attackS)          env = i / attackS;
+      else if (i > dur - releaseS) env = Math.max(0, (dur - i) / releaseS);
+
+      buf[si] += wave * amp * env;
+    }
+  }
+
+  // Normalize to prevent clipping
+  let peak = 0;
+  for (let i = 0; i < buf.length; i++) if (Math.abs(buf[i]) > peak) peak = Math.abs(buf[i]);
+  const gain = peak > 0.01 ? 0.88 / peak : 1;
+  for (let i = 0; i < buf.length; i++) buf[i] *= gain;
+
+  // ── Encode 16-bit mono WAV ─────────────────────────────────────────────
+  const ns  = buf.length;
+  const out = new ArrayBuffer(44 + ns * 2);
+  const dv  = new DataView(out);
+  let o = 0;
+  const str4 = s => { dv.setUint8(o++,s.charCodeAt(0)); dv.setUint8(o++,s.charCodeAt(1)); dv.setUint8(o++,s.charCodeAt(2)); dv.setUint8(o++,s.charCodeAt(3)); };
+  const u32  = n => { dv.setUint32(o,n,true); o+=4; };
+  const u16  = n => { dv.setUint16(o,n,true); o+=2; };
+  str4('RIFF'); u32(36 + ns*2); str4('WAVE');
+  str4('fmt '); u32(16); u16(1); u16(1); u32(SR); u32(SR*2); u16(2); u16(16);
+  str4('data'); u32(ns*2);
+  for (let i = 0; i < ns; i++) {
+    const s = Math.max(-1, Math.min(1, buf[i]));
+    dv.setInt16(o, Math.round(s * 32767), true); o += 2;
+  }
+  return out;
+}
+
+// ── WAD Parser ─────────────────────────────────────────────────────────────
+const $=id=>document.getElementById(id);
+let WAD=null,raw=null;
+let assets={textures:[],sprites:[],flats:[],images:[],sounds:[],music:[]};
+let spriteGroups={};
+let palette=[];
+let currentAudio=null,currentPlayBtn=null;
+let modalAsset=null;
+
+$('dropZone').addEventListener('dragover',e=>{e.preventDefault();$('dropZone').classList.add('drag-over')});
+$('dropZone').addEventListener('dragleave',()=>$('dropZone').classList.remove('drag-over'));
+$('dropZone').addEventListener('drop',e=>{e.preventDefault();$('dropZone').classList.remove('drag-over');if(e.dataTransfer.files[0])loadWad(e.dataTransfer.files[0])});
+$('dropZone').addEventListener('click',()=>$('file-input').click());
+$('file-input').addEventListener('change',e=>{if(e.target.files[0])loadWad(e.target.files[0])});
+$('tabBar').addEventListener('click',e=>{const t=e.target.closest('.tab');if(t)switchTab(t.dataset.panel,t)});
+
+let _progressStart = null;
+function formatTime(s){ const m=Math.floor(s/60).toString().padStart(2,'0'); const sec=Math.floor(s%60).toString().padStart(2,'0'); return `${m}:${sec}`; }
+function setP(pct,label,log){
+  // Ensure numeric percent, clamp 0-100 for visual safety
+  const num = (typeof pct === 'number' && isFinite(pct)) ? Math.max(0, Math.min(100, Math.round(pct))) : 0;
+  $('progressFill').style.width = num + '%';
+  // show numeric percent next to label
+  const pctEl = $('progressPercent');
+  if(pctEl) pctEl.textContent = (typeof pct === 'number' && isFinite(pct)) ? (Math.max(0, Math.min(100, Math.round(pct))) + '%') : '';
+  if(label) $('progressLabel').textContent = label;
+  if(log !== undefined) $('progressLog').textContent = log;
+  // timer start
+  if(!_progressStart) _progressStart = Date.now();
+  const elapsed = (Date.now() - _progressStart) / 1000;
+  $('progressTimer').textContent = formatTime(elapsed);
+  // estimate remaining (very simple heuristic: percent -> remaining)
+  const rem = (typeof pct === 'number' && pct > 0) ? Math.max(0, Math.round((100 - pct) / (pct / elapsed || 1))) : 0;
+  $('progressMode').textContent = rem > 0 ? `ETA ${formatTime(rem)}` : 'Almost';
+}
+function fmtSize(n){if(n<1024)return n+'B';if(n<1048576)return(n/1024).toFixed(1)+'KB';return(n/1048576).toFixed(1)+'MB';}
+function fmtDate(d){return d.toLocaleString();}
+function tick(){return new Promise(r=>setTimeout(r,0));}
+
+async function loadWad(file) {
+  // remember loaded filename for zip naming
+  window.loadedWadName = file.name || 'doom';
+  $('dropZone').classList.add('loaded');
+  $('dropZone').innerHTML = `<div class="loaded-info"><span>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://w3.org" style="vertical-align:middle;margin-right:.35rem" stroke="#1e90ff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 15V3M12 3L8.5 6.5M12 3L15.5 6.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M4 14V17C4 19.2091 5.79086 21 8 21H16C18.2091 21 20 19.2091 20 17V14" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <strong>${file.name}</strong></span><span>${fmtSize(file.size)}</span><span>${fmtDate(new Date())}</span><button class="btn btn-sm btn-gray" onclick="document.getElementById('file-input').click()">Change</button></div>`;
+  $('progressWrap').classList.add('show');
+  $('mainUI').style.display='none';
+  assets={textures:[],sprites:[],flats:[],images:[],sounds:[],music:[]};
+  spriteGroups={};
+
+  try {
+  setP(2,'Reading file…','');
+  const buf=await file.arrayBuffer();
+  WAD=new DataView(buf); raw=new Uint8Array(buf);
+  const magic=String.fromCharCode(raw[0],raw[1],raw[2],raw[3]);
+  if(!magic.endsWith('WAD')){setP(0,'Not a valid WAD file','');return;}
+  const numLumps=WAD.getUint32(4,true), dirOffset=WAD.getUint32(8,true);
+
+  setP(6,'Parsing directory…',`${numLumps} lumps`);
+  const lumpList=[],lumps={};
+  for(let i=0;i<numLumps;i++){
+    const base=dirOffset+i*16;
+    const offset=WAD.getUint32(base,true), size=WAD.getUint32(base+4,true);
+    let name=''; for(let j=0;j<8;j++){const c=raw[base+8+j];if(!c)break;name+=String.fromCharCode(c);}
+    lumpList.push({name,offset,size});
+    if(!lumps[name])lumps[name]={offset,size};
+  }
+
+  // Palette
+  setP(9,'Loading palette…','');
+  if(lumps['PLAYPAL']){
+    const po=lumps['PLAYPAL'].offset;
+    for(let i=0;i<256;i++) palette.push([raw[po+i*3],raw[po+i*3+1],raw[po+i*3+2]]);
+  }
+
+  // Patch names (PNAMES)
+  setP(11,'Loading patch names…','');
+  const patchNames=[];
+  if(lumps['PNAMES']){
+    const po=lumps['PNAMES'].offset, n=WAD.getUint32(po,true);
+    for(let i=0;i<n;i++){let pn='';for(let j=0;j<8;j++){const c=raw[po+4+i*8+j];if(!c)break;pn+=String.fromCharCode(c);}patchNames.push(pn);}
+  }
+  const patchLump={};
+  for(const l of lumpList) patchLump[l.name]={offset:l.offset,size:l.size};
+
+  // ── Patch decoder ──────────────────────────────────────────────────────
+  function readPatch(name,lump){
+    const p=lump||patchLump[name]; if(!p||p.size<8) return null;
+    const w=WAD.getUint16(p.offset,true), h=WAD.getUint16(p.offset+2,true);
+    if(w<=0||h<=0||w>4096||h>4096) return null;
+    const px=new Uint8Array(w*h).fill(255);
+    for(let col=0;col<w;col++){
+      let pos=WAD.getUint32(p.offset+8+col*4,true);
+      while(pos<p.size){
+        const rs=raw[p.offset+pos]; pos++;
+        if(rs===255) break;
+        const cnt=raw[p.offset+pos]; pos++; pos++;
+        for(let r=0;r<cnt;r++){const idx2=(rs+r)*w+col;if(idx2<px.length)px[idx2]=raw[p.offset+pos];pos++;}
+        pos++;
+      }
+    }
+    return{w,h,px};
+  }
+
+  function patchToCanvas(name,lump,bgColor){
+    const p=readPatch(name,lump); if(!p) return null;
+    const c=document.createElement('canvas'); c.width=p.w; c.height=p.h;
+    const ctx=c.getContext('2d'), imgd=ctx.createImageData(p.w,p.h);
+    for(let i=0;i<p.w*p.h;i++){
+      const ci=p.px[i], di=i*4;
+      if(ci===255){
+        if(bgColor){imgd.data[di]=bgColor[0];imgd.data[di+1]=bgColor[1];imgd.data[di+2]=bgColor[2];imgd.data[di+3]=255;}
+        else imgd.data[di+3]=0;
+      } else {
+        imgd.data[di]=palette[ci][0]; imgd.data[di+1]=palette[ci][1]; imgd.data[di+2]=palette[ci][2]; imgd.data[di+3]=255;
+      }
+    }
+    ctx.putImageData(imgd,0,0); return c;
+  }
+
+  // ── TEXTURES (TEXTURE1/2 composite) ───────────────────────────────────
+  setP(14,'Extracting textures…','');
+  assets.textures=[];
+  for(const tl of['TEXTURE1','TEXTURE2']){
+    if(!lumps[tl]) continue;
+    const to=lumps[tl].offset, nt=WAD.getUint32(to,true);
+    for(let i=0;i<nt;i++){
+      const ptr=WAD.getUint32(to+4+i*4,true), base=to+ptr;
+      let tname=''; for(let j=0;j<8;j++){const c=raw[base+j];if(!c)break;tname+=String.fromCharCode(c);}
+      const tw=WAD.getUint16(base+12,true), th=WAD.getUint16(base+14,true), np=WAD.getUint16(base+20,true);
+      if(tw<=0||th<=0||tw>4096||th>4096) continue;
+      const canvas=document.createElement('canvas'); canvas.width=tw; canvas.height=th;
+      const ctx=canvas.getContext('2d');
+      if(palette.length){const p0=palette[0];ctx.fillStyle=`rgb(${p0[0]},${p0[1]},${p0[2]})`;}
+      ctx.fillRect(0,0,tw,th);
+      const imgd=ctx.createImageData(tw,th);
+      for(let p2=0;p2<np;p2++){
+        const pb=base+22+p2*10, ox=WAD.getInt16(pb,true), oy=WAD.getInt16(pb+2,true), pidx=WAD.getUint16(pb+4,true);
+        if(pidx<patchNames.length){
+          const patch=readPatch(patchNames[pidx]);
+          if(patch){
+            for(let py=0;py<patch.h;py++) for(let px2=0;px2<patch.w;px2++){
+              const ci=patch.px[py*patch.w+px2]; if(ci===255) continue;
+              const dx=ox+px2, dy=oy+py; if(dx<0||dy<0||dx>=tw||dy>=th) continue;
+              const di=(dy*tw+dx)*4;
+              imgd.data[di]=palette[ci][0]; imgd.data[di+1]=palette[ci][1]; imgd.data[di+2]=palette[ci][2]; imgd.data[di+3]=255;
+            }
+          }
+        }
+      }
+      ctx.putImageData(imgd,0,0);
+      assets.textures.push({name:tname,w:tw,h:th,canvas,size:tw*th,type:'textures'});
+      // update progress with counts and last-extracted info
+      if(i%20===0){
+        setP(14+Math.floor(assets.textures.length/nt*26),'Extracting textures…',`${assets.textures.length} / ${nt}`);
+        $('filesExtracted').textContent = assets.textures.length;
+        $('extractedSize').textContent = fmtSize(assets.textures.reduce((s,a)=>s+a.size,0));
+        $('lastExtracted').textContent = `Last: ${tname} · ${tw}×${th} · ${fmtSize(tw*th)}`;
+        await tick();
+      }
+    }
+  }
+
+  // ── SPRITES (S_START…S_END) grouped by entity ──────────────────────────
+  setP(40,'Extracting sprites…','');
+  assets.sprites=[]; spriteGroups={};
+  let inS=false;
+  for(const l of lumpList){
+    if(l.name==='S_START'||l.name==='SS_START'){inS=true;continue;}
+    if(l.name==='S_END'||l.name==='SS_END'){inS=false;continue;}
+    if(!inS||l.size<8) continue;
+    const canvas=patchToCanvas(l.name,l);
+    if(!canvas) continue;
+    const prefix=l.name.slice(0,4);
+    const frame=l.name.slice(4);
+    const cat=getSpriteCategory(prefix);
+    const label=SPRITE_LABELS[prefix]||prefix;
+    const asset={name:l.name,prefix,frame,label,cat,w:canvas.width,h:canvas.height,canvas,size:l.size,type:'sprites'};
+    assets.sprites.push(asset);
+    if(!spriteGroups[prefix]) spriteGroups[prefix]={prefix,label,cat,frames:[]};
+    spriteGroups[prefix].frames.push(asset);
+    if(assets.sprites.length%25===0){
+      setP(42+Math.min(assets.sprites.length/8,20),'Extracting sprites…',`${assets.sprites.length} sprites`);
+      $('filesExtracted').textContent = assets.sprites.length + assets.textures.length;
+      $('extractedSize').textContent = fmtSize( (assets.textures.reduce((s,a)=>s+a.size,0)) + (assets.sprites.reduce((s,a)=>s+a.size,0)) );
+      $('lastExtracted').textContent = `Last: ${asset.name} · ${asset.w}×${asset.h} · ${fmtSize(asset.size)}`;
+      await tick();
+    }
+  }
+
+  // ── FLATS (F_START…F_END) ──────────────────────────────────────────────
+  setP(65,'Extracting flats…','');
+  assets.flats=[];
+  let inF=false;
+  for(const l of lumpList){
+    if(l.name==='F_START'||l.name==='F1_START'||l.name==='FF_START'){inF=true;continue;}
+    if(l.name==='F_END'||l.name==='F1_END'||l.name==='FF_END'){inF=false;continue;}
+    if(!inF||l.size!==4096) continue;
+    const canvas=document.createElement('canvas'); canvas.width=64; canvas.height=64;
+    const ctx=canvas.getContext('2d'), imgd=ctx.createImageData(64,64);
+    for(let i=0;i<4096;i++){
+      const ci=raw[l.offset+i], di=i*4;
+      imgd.data[di]=palette[ci][0]; imgd.data[di+1]=palette[ci][1]; imgd.data[di+2]=palette[ci][2]; imgd.data[di+3]=255;
+    }
+    ctx.putImageData(imgd,0,0);
+    assets.flats.push({name:l.name,w:64,h:64,canvas,size:4096,type:'flats'});
+    $('filesExtracted').textContent = assets.flats.length + assets.sprites.length + assets.textures.length;
+    $('extractedSize').textContent = fmtSize( (assets.textures.reduce((s,a)=>s+a.size,0)) + (assets.sprites.reduce((s,a)=>s+a.size,0)) + (assets.flats.reduce((s,a)=>s+a.size,0)) );
+    $('lastExtracted').textContent = `Last: ${l.name} · 64×64 · ${fmtSize(4096)}`;
+  }
+
+  // ── FULL-SCREEN IMAGES ─────────────────────────────────────────────────
+  setP(72,'Extracting images…','');
+  assets.images=[];
+  const imgNames=['TITLEPIC','HELP1','HELP2','CREDIT','WIMAP0','BOSSBACK','STBAR','ENDPIC','VICTORY2','PFUB1','PFUB2'];
+  for(const n of imgNames){
+    if(!lumps[n]) continue;
+    const l=lumps[n];
+    const canvas=patchToCanvas(n,l,palette[0]||[0,0,0]);
+    if(canvas){
+      assets.images.push({name:n,w:canvas.width,h:canvas.height,canvas,size:l.size,type:'images'});
+      $('filesExtracted').textContent = assets.images.length + assets.flats.length + assets.sprites.length + assets.textures.length;
+      $('extractedSize').textContent = fmtSize( (assets.textures.reduce((s,a)=>s+a.size,0)) + (assets.sprites.reduce((s,a)=>s+a.size,0)) + (assets.flats.reduce((s,a)=>s+a.size,0)) + (assets.images.reduce((s,a)=>s+a.size,0)) );
+      $('lastExtracted').textContent = `Last: ${n} · ${canvas.width}×${canvas.height} · ${fmtSize(l.size)}`;
+    }
+  }
+
+  // ── SOUNDS (DS* digital SFX) ───────────────────────────────────────────
+  setP(76,'Extracting sounds…','');
+  assets.sounds=[];
+  for(const l of lumpList){
+    if(!l.name.startsWith('DS')||l.size<8) continue;
+    const fmt=WAD.getUint16(l.offset,true); if(fmt!==3) continue;
+    const rate=WAD.getUint16(l.offset+2,true), numSamples=WAD.getUint32(l.offset+4,true);
+    const samples=raw.slice(l.offset+8,l.offset+8+numSamples);
+    const dur=numSamples/rate;
+    assets.sounds.push({name:l.name,rate,numSamples,samples,dur,size:l.size,type:'sounds'});
+    $('filesExtracted').textContent = assets.sounds.length + assets.images.length + assets.flats.length + assets.sprites.length + assets.textures.length;
+    $('extractedSize').textContent = fmtSize( (assets.textures.reduce((s,a)=>s+a.size,0)) + (assets.sprites.reduce((s,a)=>s+a.size,0)) + (assets.flats.reduce((s,a)=>s+a.size,0)) + (assets.images.reduce((s,a)=>s+a.size,0)) + (assets.sounds.reduce((s,a)=>s+a.size,0)) );
+    $('lastExtracted').textContent = `Last: ${l.name} · ${fmtSize(l.size)}`;
+  }
+
+  // ── MUSIC (D_* MUS→WAV synthesized) ──────────────────────────────────
+  setP(84,'Synthesizing music (MUS→WAV)…','');
+  assets.music=[];
+  const TRACK_NAMES={
+    D_E1M1:'E1M1 — At Doom\'s Gate',D_E1M2:'E1M2 — The Imp\'s Song',
+    D_E1M3:'E1M3 — Dark Halls',D_E1M4:'E1M4 — Kitchen Ace (And Taking Names)',
+    D_E1M5:'E1M5 — Suspense',D_E1M6:'E1M6 — On the Hunt',
+    D_E1M7:'E1M7 — Demons on the Prey',D_E1M8:'E1M8 — Sign of Evil',
+    D_E1M9:'E1M9 — Hiding the Secrets',D_INTER:'Intermission — In the Dark',
+    D_INTRO:'Title / Intro',D_VICTOR:'Victory'
+  };
+  for(const l of lumpList){
+    if(!l.name.startsWith('D_')||l.size<16) continue;
+    if(raw[l.offset]!==0x4D||raw[l.offset+1]!==0x55||raw[l.offset+2]!==0x53) continue;
+    const musData=raw.slice(l.offset,l.offset+l.size);
+    setP(84,'Synthesizing music…',l.name);
+    await tick();
+    const wavBuf=musToWav(musData);
+    if(!wavBuf) continue;
+    const blob=new Blob([wavBuf],{type:'audio/wav'});
+    const url=URL.createObjectURL(blob);
+    assets.music.push({name:l.name,label:TRACK_NAMES[l.name]||l.name,url,wavBuf,musSize:l.size,type:'music'});
+    // update UI counts for music extracted
+    $('filesExtracted').textContent = assets.music.length + assets.sounds.length + assets.images.length + assets.flats.length + assets.sprites.length + assets.textures.length;
+    $('extractedSize').textContent = fmtSize( (assets.textures.reduce((s,a)=>s+a.size,0)) + (assets.sprites.reduce((s,a)=>s+a.size,0)) + (assets.flats.reduce((s,a)=>s+a.size,0)) + (assets.images.reduce((s,a)=>s+a.size,0)) + (assets.sounds.reduce((s,a)=>s+a.size,0)) + (assets.music.reduce((s,a)=>s+a.musSize,0)) );
+    $('lastExtracted').textContent = `Last: ${l.name} · ${fmtSize(l.size)}`;
+  }
+
+  setP(93,'Rendering UI…','');
+  await tick();
+
+  $('statsBar').innerHTML=`
+    <div class="stat"><div class="val">${assets.textures.length}</div><div class="lbl">Textures</div></div>
+    <div class="stat"><div class="val">${assets.sprites.length}</div><div class="lbl">Sprites</div></div>
+    <div class="stat"><div class="val">${Object.keys(spriteGroups).length}</div><div class="lbl">Entities</div></div>
+    <div class="stat"><div class="val">${assets.flats.length}</div><div class="lbl">Flats</div></div>
+    <div class="stat"><div class="val">${assets.images.length}</div><div class="lbl">Images</div></div>
+    <div class="stat"><div class="val">${assets.sounds.length}</div><div class="lbl">Sounds</div></div>
+    <div class="stat"><div class="val">${assets.music.length}</div><div class="lbl">Music</div></div>
+    <div class="stat"><div class="val">${numLumps}</div><div class="lbl">Lumps</div></div>
+    <div class="stat"><div class="val">${fmtSize(file.size)}</div><div class="lbl">WAD Size</div></div>
+  `;
+
+  renderGrid('textures'); renderSprites(null,'');
+  renderGrid('flats'); renderGrid('images',true);
+  renderSounds(assets.sounds); renderMusic(); renderDLRows();
+
+  setP(100,'Done!','');
+  // reset timer start for next run
+  _progressStart = null;
+  setTimeout(()=>$('progressWrap').classList.remove('show'),1000);
+  $('mainUI').style.display='block';
+  } catch(err) {
+    setP(0,'❌ Error: '+err.message, err.stack||'');
+    console.error('WAD load error:', err);
+  }
+}
+
+// ── Canvas thumbnail helper (cloneNode does NOT copy pixel data) ────────────
+function makeThumb(src, maxW, maxH) {
+  const scale = Math.min(maxW / src.width, maxH / src.height, 1);
+  const w = Math.max(1, Math.round(src.width * scale));
+  const h = Math.max(1, Math.round(src.height * scale));
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  c.style.imageRendering = 'pixelated';
+  c.style.display = 'block';
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(src, 0, 0, w, h);
+  return c;
+}
+
+function makeCard(a, wide) {
+  const card = document.createElement('div'); card.className = 'card';
+  const wrap = document.createElement('div'); wrap.className = 'canvas-wrap';
+  const thumb = makeThumb(a.canvas, wide ? 320 : 128, wide ? 160 : 95);
+  wrap.appendChild(thumb);
+  const info = document.createElement('div'); info.className = 'card-info';
+  info.innerHTML = `<div class="name" title="${a.name}">${a.name}</div><div class="dims">${a.w}×${a.h} · ${fmtSize(a.size)}</div>`;
+  card.appendChild(wrap); card.appendChild(info);
+  card.addEventListener('click', () => openModal(a));
+  return card;
+}
+
+// ── Grid renderer ──────────────────────────────────────────────────────────
+function renderGrid(type, wide) {
+  const g = $(wide ? 'grid-images' : 'grid-' + type);
+  g.innerHTML = '';
+  const list = assets[type];
+  if (!list.length) { g.innerHTML = '<div class="empty">None found.</div>'; return; }
+  for (const a of list) g.appendChild(makeCard(a, wide));
+}
+
+function filterAssets(type, q) {
+  const list = q ? assets[type].filter(a => a.name.toLowerCase().includes(q.toLowerCase())) : assets[type];
+  const g = $('grid-' + type); g.innerHTML = '';
+  for (const a of list) g.appendChild(makeCard(a, false));
+}
+function sortAssets(type,by){
+  assets[type].sort((a,b)=>by==='name'?a.name.localeCompare(b.name):by==='width'?b.w-a.w:b.h-a.h);
+  renderGrid(type,type==='images');
+}
+
+// ── Sprite renderer (grouped by entity) ───────────────────────────────────
+const CAT_LABELS={enemy:'Enemies',player:'Player',weapon:'Weapons',item:'Items & Pickups',projectile:'Projectiles',effect:'Effects & Gore',decor:'Decorations & Props'};
+const CAT_TAG={enemy:'tag-red',player:'tag-blue',weapon:'tag-purple',item:'tag-green',projectile:'tag-orange',effect:'tag-teal',decor:'tag-red'};
+const CAT_LBL_CLASS={enemy:'lbl-enemy',player:'lbl-player',weapon:'lbl-weapon',item:'lbl-item',projectile:'lbl-projectile',effect:'lbl-effect',decor:'lbl-decor'};
+
+function renderSprites(catFilter,search){
+  const g=$('spriteGroups'); g.innerHTML='';
+  const searchLo=(search||'').toLowerCase();
+  // Order: enemies first, then player, weapons, items, etc.
+  const CAT_ORDER=['enemy','player','weapon','item','projectile','effect','decor'];
+  const grouped={};
+  for(const [pfx,grp] of Object.entries(spriteGroups)){
+    if(catFilter && grp.cat!==catFilter) continue;
+    if(searchLo && !pfx.toLowerCase().includes(searchLo) && !grp.label.toLowerCase().includes(searchLo)) continue;
+    grouped[grp.cat]=grouped[grp.cat]||[];
+    grouped[grp.cat].push(grp);
+  }
+  for(const cat of CAT_ORDER){
+    const grps=grouped[cat]; if(!grps||!grps.length) continue;
+    const catSec=document.createElement('div');
+    catSec.innerHTML=`<div style="font-size:.68rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:3px;margin:1rem 0 .6rem;padding:.3rem 0;border-bottom:1px solid #222;">${CAT_LABELS[cat]||cat}</div>`;
+    g.appendChild(catSec);
+    for(const grp of grps.sort((a,b)=>a.prefix.localeCompare(b.prefix))){
+      const sec=document.createElement('div'); sec.className='sprite-group';
+      const title=document.createElement('div'); title.className='sprite-group-title';
+      title.innerHTML=`<span class="sprite-label ${CAT_LBL_CLASS[grp.cat]}">${grp.cat}</span> <strong style="color:#ddd">${grp.prefix}</strong> <span style="color:#aaa;font-size:.72rem;font-weight:400;text-transform:none;letter-spacing:0">${grp.label}</span> <span>${grp.frames.length} frames</span>
+        <button class="btn btn-sm btn-gray" style="margin-left:auto;padding:.2rem .5rem;font-size:.6rem" onclick="exportSpriteSheet('${grp.prefix}')">⬛ Sheet</button>
+        <button class="btn btn-sm btn-gray" style="padding:.2rem .5rem;font-size:.6rem" onclick="exportGif('${grp.prefix}')">▶ GIF</button>`;
+      const frames=document.createElement('div'); frames.className='sprite-frames';
+      const SCALE=Math.min(4,Math.max(1,Math.floor(80/Math.max(grp.frames[0]?.w||8,1))));
+      for(const a of grp.frames){
+        const fc=document.createElement('div'); fc.className='frame-card';
+        const dispW=Math.min(Math.max(a.w*2,32),120);
+        const dispH=Math.min(Math.max(a.h*2,32),120);
+        const thumb=makeThumb(a.canvas, dispW, dispH);
+        thumb.style.width=dispW+'px'; thumb.style.height=dispH+'px';
+        fc.appendChild(thumb);
+        const fn=document.createElement('div'); fn.className='fname'; fn.textContent=a.name; fn.title=a.name+' '+fmtSize(a.size);
+        fc.appendChild(fn);
+        fc.addEventListener('click',()=>openModal(a));
+        frames.appendChild(fc);
+      }
+      sec.appendChild(title); sec.appendChild(frames);
+      g.appendChild(sec);
+    }
+  }
+  if(!g.children.length) g.innerHTML='<div class="empty">No sprites found.</div>';
+}
+
+function filterSprites(q){
+  const cat=$('spriteCat').value;
+  renderSprites(cat||null, q||'');
+}
+
+// ── Sounds ─────────────────────────────────────────────────────────────────
+function renderSounds(list){
+  const sl=$('soundList'); sl.innerHTML='';
+  if(!list.length){sl.innerHTML='<div class="empty">No sounds found.</div>';return;}
+  for(const s of list){
+    const row=document.createElement('div'); row.className='sound-row';
+    row.innerHTML=`
+      <button class="play-btn idle" title="Play/Stop">▶</button>
+      <div class="sname">${s.name}</div>
+      <canvas class="wave-canvas" height="32"></canvas>
+      <div class="sound-meta">${s.rate}Hz<br>${fmtSize(s.size)}<br>${s.dur.toFixed(2)}s</div>
+      <button class="dl-btn" title="Download WAV">⬇</button>`;
+    const wc=row.querySelector('.wave-canvas');
+    requestAnimationFrame(()=>drawWaveform(wc,s.samples));
+    const pb=row.querySelector('.play-btn');
+    pb.addEventListener('click',()=>playSound(s,pb));
+    row.querySelector('.wave-canvas').addEventListener('click',()=>playSound(s,pb));
+    row.querySelector('.dl-btn').addEventListener('click',()=>downloadWav(s));
+    sl.appendChild(row);
+  }
+}
+function filterSounds(q){renderSounds(q?assets.sounds.filter(s=>s.name.toLowerCase().includes(q.toLowerCase())):assets.sounds);}
+function sortSounds(by){
+  renderSounds([...assets.sounds].sort((a,b)=>by==='name'?a.name.localeCompare(b.name):by==='size'?b.size-a.size:b.dur-a.dur));
+}
+function drawWaveform(canvas,samples){
+  const W=canvas.offsetWidth||200,H=32; canvas.width=W; canvas.height=H;
+  const ctx=canvas.getContext('2d'); ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle='#c0392b'; ctx.lineWidth=1; ctx.beginPath();
+  const step=Math.max(1,(samples.length/W)|0);
+  for(let x=0;x<W;x++){
+    let mn=255,mx=0; const st=(x*samples.length/W)|0;
+    for(let i=0;i<step&&st+i<samples.length;i++){const v=samples[st+i];if(v<mn)mn=v;if(v>mx)mx=v;}
+    ctx.moveTo(x,H-((mn/255)*H)); ctx.lineTo(x,H-((mx/255)*H));
+  }
+  ctx.stroke();
+}
+function buildWav(s){
+  const ns=s.numSamples, buf=new ArrayBuffer(44+ns), v=new DataView(buf);
+  let o=0;
+  const ws=str=>{for(let i=0;i<str.length;i++)v.setUint8(o++,str.charCodeAt(i));};
+  const w32=n=>{v.setUint32(o,n,true);o+=4;}; const w16=n=>{v.setUint16(o,n,true);o+=2;};
+  ws('RIFF');w32(36+ns);ws('WAVE');ws('fmt ');w32(16);w16(1);w16(1);w32(s.rate);w32(s.rate);w16(1);w16(8);
+  ws('data');w32(ns); new Uint8Array(buf,44).set(s.samples);
+  return buf;
+}
+function playSound(s,btn){
+  if(currentAudio){currentAudio.pause();currentAudio.currentTime=0;if(currentPlayBtn){currentPlayBtn.textContent='▶';currentPlayBtn.className='play-btn idle';}if(currentPlayBtn===btn){currentAudio=null;currentPlayBtn=null;return;}}
+  const wavBuf=buildWav(s);
+  const blob=new Blob([wavBuf],{type:'audio/wav'});
+  const url=URL.createObjectURL(blob);
+  const audio=new Audio(url); audio.play();
+  btn.textContent='■'; btn.className='play-btn playing';
+  currentAudio=audio; currentPlayBtn=btn;
+  audio.onended=()=>{btn.textContent='▶';btn.className='play-btn idle';if(currentAudio===audio){currentAudio=null;currentPlayBtn=null;}URL.revokeObjectURL(url);};
+}
+function downloadWav(s){
+  const blob=new Blob([buildWav(s)],{type:'audio/wav'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=s.name+'.wav';a.click();
+}
+
+// ── Music ──────────────────────────────────────────────────────────────────
+function renderMusic(){
+  const ml=$('musicList'); ml.innerHTML='';
+  if(!assets.music.length){ml.innerHTML='<div class="empty">No music found.</div>';return;}
+  for(const m of assets.music){
+    const row=document.createElement('div'); row.className='music-row';
+    row.innerHTML=`
+      <div class="music-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1e90ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+      <div class="music-info"><div class="name">${m.label}</div><div class="meta">${m.name} · MUS→WAV synthesized · ${fmtSize(m.musSize)} source</div></div>
+      <audio controls src="${m.url}" preload="none" style="flex:1;min-width:180px;height:26px"></audio>
+      <button class="dl-btn" title="Download WAV">⬇</button>`;
+    row.querySelector('.dl-btn').addEventListener('click',()=>{
+      const a=document.createElement('a');a.href=m.url;a.download=m.name+'.wav';a.click();
+    });
+    ml.appendChild(row);
+  }
+}
+
+// ── Downloads ──────────────────────────────────────────────────────────────
+function renderDLRows(){
+  // Add a top-level "Everything" batch row and then per-category rows (matching style of "All Textures — PNG" entries)
+  const rows = [
+    {label:'Everything — ZIP All Assets', action: 'all', cnt: (assets.textures.length + assets.sprites.length + assets.flats.length + assets.images.length + assets.sounds.length + assets.music.length), cls:'btn-green'},
+    {label:'All Textures — PNG', action:'textures', cnt:assets.textures.length, cls:'btn-red'},
+    {label:'All Sprites — PNG', action:'sprites', cnt:assets.sprites.length, cls:'btn-red'},
+    {label:'All Flats — PNG', action:'flats', cnt:assets.flats.length, cls:'btn-red'},
+    {label:'All Graphics — PNG', action:'images', cnt:assets.images.length, cls:'btn-red'},
+    {label:'All Sounds — WAV', action:'sounds', cnt:assets.sounds.length, cls:'btn-gray'},
+    {label:'All Music — WAV', action:'music', cnt:assets.music.length, cls:'btn-gray'},
+  ];
+
+  // Build HTML, wiring the Everything button to zipAll() and the others to zipAssets(action)
+  const parts = rows.map(r=>{
+    const btn = r.action === 'all'
+      ? `<button class="btn ${r.cls}" onclick="zipAll()">⬇ ZIP</button>`
+      : `<button class="btn ${r.cls}" onclick="zipAssets('${r.action}')">⬇ ZIP</button>`;
+    return `<div class="dl-row">
+      <div class="dl-info"><h4>${r.label}</h4><p>${r.cnt} files</p></div>
+      ${btn}
+    </div>`;
+  });
+
+  $('dlRows').innerHTML = parts.join('');
+}
+
+async function zipAssets(type){
+  const zip=new JSZip(), folder=zip.folder(type);
+  if(type==='sounds'){
+    for(const s of assets.sounds) folder.file(s.name+'.wav', buildWav(s));
+  } else if(type==='music'){
+    for(const m of assets.music) folder.file(m.name+'.wav', m.wavBuf);
+  } else {
+    for(const a of assets[type]) folder.file(a.name+'.png', a.canvas.toDataURL('image/png').split(',')[1], {base64:true});
+  }
+  const blob=await zip.generateAsync({type:'blob'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`doom_${type}.zip`;a.click();
+}
+
+/* ZIP Everything: collect all asset categories into a single ZIP */
+async function zipAll(){
+  // Build per-category zips first, reporting progress for the user.
+  const categories = [
+    {key:'textures',  label:'textures',   maker: async (z)=>{ for(const a of assets.textures) z.file(a.name + '.png', a.canvas.toDataURL('image/png').split(',')[1], {base64:true}); }},
+    {key:'sprites',   label:'sprites',    maker: async (z)=>{ for(const a of assets.sprites) z.file(a.name + '.png', a.canvas.toDataURL('image/png').split(',')[1], {base64:true}); }},
+    {key:'flats',     label:'flats',      maker: async (z)=>{ for(const a of assets.flats) z.file(a.name + '.png', a.canvas.toDataURL('image/png').split(',')[1], {base64:true}); }},
+    {key:'images',    label:'graphics',   maker: async (z)=>{ for(const a of assets.images) z.file(a.name + '.png', a.canvas.toDataURL('image/png').split(',')[1], {base64:true}); }},
+    {key:'sounds',    label:'sounds',     maker: async (z)=>{ for(const s of assets.sounds) z.file(s.name + '.wav', buildWav(s)); }},
+    {key:'music',     label:'music',      maker: async (z)=>{ for(const m of assets.music) z.file(m.name + '.wav', m.wavBuf); }},
+  ];
+
+  // Helper: build a zip for one category and return blob while emitting progress via setP
+  async function createCategoryZip(catIndex){
+    const cat = categories[catIndex];
+    const z = new JSZip();
+    await cat.maker(z);
+    const labelBase = `Creating ${cat.label} ZIP`;
+    let lastPct = 0;
+    const blob = await z.generateAsync({type:'blob'}, meta=>{
+      const pct = Math.round(meta.percent || 0);
+      // map category progress into overall step
+      const step = catIndex;
+      const perStep = 100 / (categories.length + 1); // last step is master zip
+      const overallPct = Math.floor(step * perStep + (pct/100) * perStep);
+      if (overallPct !== lastPct) {
+        lastPct = overallPct;
+        setP(overallPct, `${labelBase}: ${pct}%`, `${cat.label} ${pct}%`);
+      }
+    });
+    // ensure at least progress shows this step complete
+    setP(Math.floor((catIndex+1) * (100 / (categories.length+1))), `${cat.label} ZIP ready`, `${cat.label} done`);
+    await tick();
+    return {label:cat.label, blob};
+  }
+
+  try{
+    // Build each category zip sequentially (keeps memory use reasonable)
+    const parts = [];
+    for(let i=0;i<categories.length;i++){
+      // skip empty categories quickly
+      const cKey = categories[i].key;
+      if(!assets[cKey] || assets[cKey].length===0){
+        setP(Math.floor((i+1) * (100 / (categories.length+1))), `Skipping ${categories[i].label} (none)`, `${categories[i].label} empty`);
+        await tick();
+        continue;
+      }
+      parts.push(await createCategoryZip(i));
+    }
+
+    // Now create master zip and include each category zip as a file
+    const master = new JSZip();
+    for(const p of parts){
+      // Use filename like textures.zip etc.
+      master.file(`${p.label}.zip`, p.blob);
+    }
+
+    // Master zip generation with progress
+    let lastMasterPct = 0;
+    const masterBlob = await master.generateAsync({type:'blob'}, meta=>{
+      const pct = Math.round(meta.percent || 0);
+      // Map master progress into final portion
+      const perStep = 100 / (categories.length + 1);
+      const overallBase = categories.length * perStep;
+      const overallPct = Math.min(99, Math.floor(overallBase + (pct/100) * perStep));
+      if(overallPct !== lastMasterPct){
+        lastMasterPct = overallPct;
+        setP(overallPct, `Building final archive: ${pct}%`, `Packaging ${pct}%`);
+      }
+    });
+
+    // Finalize: derive filename
+    const baseName = (window.loadedWadName || 'doom').replace(/\.[^.]+$/,'');
+    const finalName = `${baseName} [Extracted with DWADE].zip`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(masterBlob);
+    a.download = finalName;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    setP(100, 'All done', `Saved ${finalName}`);
+    // small delay then clear progress UI
+    setTimeout(()=>{ $('progressWrap').classList.remove('show'); _progressStart=null; }, 900);
+  }catch(err){
+    console.error('zipAll error',err);
+    setP(0,'ZIP error', err.message||'');
+  }
+}
+
+// ── Modal ──────────────────────────────────────────────────────────────────
+function openModal(a){
+  modalAsset=a;
+  $('modalTitle').textContent=a.name+(a.label&&a.label!==a.prefix?' — '+a.label:'');
+  const mc=$('modalCanvas');
+  const maxW=Math.min(window.innerWidth*.85,720);
+  const s=Math.max(1,Math.min(6,Math.floor(maxW/a.w),Math.floor(560/a.h)));
+  mc.width=a.w*s; mc.height=a.h*s;
+  const ctx=mc.getContext('2d');ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(a.canvas,0,0,mc.width,mc.height);
+  $('modalMeta').innerHTML=`${a.w} × ${a.h} px · ${fmtSize(a.size)} · Preview ${s}× · ${fmtDate(new Date())}${a.frame?' · Frame: '+a.frame:''}${a.cat?' · Category: '+a.cat:''}`;
+  $('modalBtns').innerHTML=`<button class="btn btn-sm btn-red" onclick="downloadModalPng()">⬇ PNG</button>`;
+  $('assetModal').classList.add('show');
+}
+function downloadModalPng(){
+  if(!modalAsset) return;
+  const a=document.createElement('a');a.href=modalAsset.canvas.toDataURL('image/png');a.download=modalAsset.name+'.png';a.click();
+}
+
+// ── Spritesheet export ─────────────────────────────────────────────────────
+function exportSpriteSheet(prefix) {
+  const grp = spriteGroups[prefix];
+  if (!grp || !grp.frames.length) return;
+  const frames = grp.frames;
+  const maxW = Math.max(...frames.map(f=>f.w));
+  const maxH = Math.max(...frames.map(f=>f.h));
+  const COLS = Math.ceil(Math.sqrt(frames.length));
+  const ROWS = Math.ceil(frames.length / COLS);
+  const PAD = 2;
+  const SW = (maxW + PAD) * COLS + PAD;
+  const SH = (maxH + PAD) * ROWS + PAD;
+  const sc = document.createElement('canvas');
+  sc.width = SW; sc.height = SH;
+  const ctx = sc.getContext('2d');
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(0, 0, SW, SH);
+  ctx.imageSmoothingEnabled = false;
+  frames.forEach((f, i) => {
+    const col = i % COLS, row = Math.floor(i / COLS);
+    const x = PAD + col * (maxW + PAD) + Math.floor((maxW - f.w) / 2);
+    const y = PAD + row * (maxH + PAD) + Math.floor((maxH - f.h) / 2);
+    ctx.drawImage(f.canvas, x, y);
+  });
+  // Label
+  ctx.fillStyle = 'rgba(0,0,0,.6)';
+  ctx.fillRect(0, 0, SW, 14);
+  ctx.fillStyle = '#1e90ff';
+  ctx.font = '10px monospace';
+  ctx.fillText(`${prefix} — ${grp.label} — ${frames.length} frames — ${maxW}×${maxH} max`, 4, 10);
+  const a = document.createElement('a');
+  a.href = sc.toDataURL('image/png');
+  a.download = `${prefix}_spritesheet.png`;
+  a.click();
+}
+
+// ── GIF encoder (pure JS, no library) ─────────────────────────────────────
+// Minimal GIF89a encoder supporting transparency and palette per frame
+function exportGif(prefix) {
+  const grp = spriteGroups[prefix];
+  if (!grp || !grp.frames.length) { alert('No frames for ' + prefix); return; }
+  const frames = grp.frames;
+  const maxW = Math.max(...frames.map(f=>f.w));
+  const maxH = Math.max(...frames.map(f=>f.h));
+  const DELAY = 10; // 10 * 10ms = 100ms per frame = ~10fps
+
+  // Build GIF byte array
+  const out = [];
+  const wb = b => out.push(b & 0xFF);
+  const ww = n => { wb(n & 0xFF); wb((n>>8) & 0xFF); };
+  const ws = s => { for(let i=0;i<s.length;i++) wb(s.charCodeAt(i)); };
+
+  // ── Header ──
+  ws('GIF89a');
+  ww(maxW); ww(maxH);
+  wb(0xF0); // GCT flag=1, color res=1, sort=0, GCT size=0 (2 colors)
+  wb(0);    // background index = 0 (black)
+  wb(0);    // pixel aspect ratio
+  // Global color table: 2 entries (black + black padding)
+  wb(0); wb(0); wb(0); // index 0 = black (background)
+  wb(0); wb(0); wb(0); // index 1 = black (padding)
+
+  // ── Netscape loop extension (loop forever) ──
+  wb(0x21); wb(0xFF); wb(11);
+  ws('NETSCAPE2.0');
+  wb(3); wb(1); ww(0); wb(0); // loop count = 0 = infinite
+
+  // ── LZW compress pixels ──
+  function lzwCompress(pixels, minBits) {
+    const cc = 1 << minBits;        // clear code
+    const ec = cc + 1;              // end code
+    let ns = ec + 1;                // next available code
+    let bits = minBits + 1;         // current bit width
+    let buf = 0, nbuf = 0;
+    const bytes = [];
+    const wbyte = b => bytes.push(b);
+
+    const writeBits = v => {
+      buf |= (v << nbuf);
+      nbuf += bits;
+      while (nbuf >= 8) { wbyte(buf & 0xFF); buf >>= 8; nbuf -= 8; }
+    };
+
+    let table = {};
+    const reset = () => {
+      table = {}; ns = ec + 1; bits = minBits + 1;
+      writeBits(cc);
+    };
+
+    reset();
+    let str = pixels[0];
+    for (let i = 1; i < pixels.length; i++) {
+      const ch = pixels[i];
+      const key = (str << 8) | ch;
+      if (table[key] !== undefined) {
+        str = table[key];
+      } else {
+        writeBits(str);
+        if (ns < 4096) {
+          table[key] = ns++;
+          if (ns > (1 << bits) && bits < 12) bits++;
+        } else {
+          reset();
+          str = ch; continue;
+        }
+        str = ch;
+      }
+    }
+    writeBits(str);
+    writeBits(ec);
+    if (nbuf > 0) wbyte(buf & 0xFF);
+    return bytes;
+  }
+
+  for (const f of frames) {
+    // Get pixel data from canvas - fresh canvas per frame
+    const tmpC = document.createElement('canvas');
+    tmpC.width = maxW; tmpC.height = maxH;
+    const tmpCtx = tmpC.getContext('2d');
+    // Explicitly clear to fully transparent
+    tmpCtx.clearRect(0, 0, maxW, maxH);
+    tmpCtx.imageSmoothingEnabled = false;
+    // Center frame in max bounds
+    const ox = Math.floor((maxW - f.w) / 2);
+    const oy = Math.floor((maxH - f.h) / 2);
+    tmpCtx.drawImage(f.canvas, ox, oy);
+    const imgd = tmpCtx.getImageData(0, 0, maxW, maxH);
+    const rgba = imgd.data;
+
+    // Build local palette (max 255 colors + 1 transparent)
+    const colorMap = {};
+    const palette  = [[0,0,0]]; // index 0 = transparent placeholder
+    const indices  = new Uint8Array(maxW * maxH);
+    let   nc = 1;
+
+    for (let i = 0; i < maxW * maxH; i++) {
+      const r=rgba[i*4], g=rgba[i*4+1], b=rgba[i*4+2], a=rgba[i*4+3];
+      if (a < 64) { indices[i] = 0; continue; } // transparent
+      const key = (r<<16)|(g<<8)|b;
+      if (colorMap[key] === undefined) {
+        if (nc < 256) {
+          colorMap[key] = nc;
+          palette.push([r,g,b]);
+          nc++;
+        } else {
+          // quantize to nearest
+          let best=1, bestD=1e9;
+          for(let p=1;p<palette.length;p++){
+            const dr=r-palette[p][0],dg=g-palette[p][1],db=b-palette[p][2];
+            const d=dr*dr+dg*dg+db*db;
+            if(d<bestD){bestD=d;best=p;}
+          }
+          colorMap[key]=best;
+        }
+      }
+      indices[i] = colorMap[key];
+    }
+
+    // Pad palette to power of 2
+    let palBits = 1;
+    while ((1 << palBits) < nc) palBits++;
+    palBits = Math.max(palBits, 2);
+    const palSize = 1 << palBits;
+    while (palette.length < palSize) palette.push([0,0,0]);
+
+    // ── Graphic Control Extension (transparency + delay) ──
+    wb(0x21); wb(0xF9); wb(4);
+    wb(0x09); // disposal=2 (restore to bg), transparent=1
+    ww(DELAY);
+    wb(0);    // transparent color index = 0
+    wb(0);
+
+    // ── Image Descriptor ──
+    wb(0x2C);
+    ww(0); ww(0); ww(maxW); ww(maxH);
+    wb(0x80 | (palBits - 1)); // local CT flag + size
+
+    // Local color table
+    for (const [r,g,b] of palette) { wb(r); wb(g); wb(b); }
+
+    // ── Image Data (LZW) ──
+    const minBits = Math.max(palBits, 2);
+    wb(minBits);
+    const compressed = lzwCompress(Array.from(indices), minBits);
+    // Write as sub-blocks (max 255 bytes each)
+    for (let i = 0; i < compressed.length; ) {
+      const len = Math.min(255, compressed.length - i);
+      wb(len);
+      for (let j = 0; j < len; j++) wb(compressed[i++]);
+    }
+    wb(0); // block terminator
+  }
+
+  // ── Trailer ──
+  wb(0x3B);
+
+  const blob = new Blob([new Uint8Array(out)], {type:'image/gif'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${prefix}_${grp.label.replace(/[^a-z0-9]/gi,'_')}.gif`;
+  a.click();
+}
+
+/* Quick settings: open modal and apply/save/reset options */
+document.getElementById('settingsBtn')?.addEventListener('click', (e)=>{
+  e.stopPropagation();
+  document.getElementById('quickSettings').classList.add('show');
+  // load current values into controls
+  loadSettingsToUI();
+});
+
+function closeSettings(){
+  document.getElementById('quickSettings').classList.remove('show');
+}
+
+/* Persisted settings and application */
+const DEFAULT_SETTINGS = {
+  mode: 'dark',    // 'dark' or 'light'
+  scale: 1.0,
+  lang: 'en'
+};
+
+function getSettings(){
+  try { return Object.assign({}, DEFAULT_SETTINGS, JSON.parse(localStorage.getItem('doom_quick_settings') || '{}')); }
+  catch(e){ return Object.assign({}, DEFAULT_SETTINGS); }
+}
+
+function applySettings(s){
+  const root = document.documentElement;
+  const logo = document.getElementById('doomLogo');
+  // mode
+  const isLight = s.mode === 'light';
+  if (isLight) {
+    // update CSS variables for light theme
+    root.style.setProperty('--accent', '#1e90ff');
+    root.style.setProperty('--muted', '#000000');
+    root.style.setProperty('--text', '#000000');
+    root.style.setProperty('--surface', '#ffffff');
+    root.style.setProperty('--surface2', '#f6f6f6');
+    root.style.setProperty('--body-bg', '#ffffff');
+    root.style.setProperty('--header-from', '#ffffff');
+    root.style.setProperty('--header-to', '#f2f2f2');
+    // light overlay for modals
+    root.style.setProperty('--modal-overlay-bg', 'rgba(255,255,255,0.8)');
+    document.body.style.color = '#000';
+    document.querySelectorAll('header h1, header .subtitle').forEach(el=>el.style.color='#000');
+    if (logo) logo.style.filter = 'invert(1) hue-rotate(180deg)';
+    // apply class to let CSS overrides take effect
+    root.classList.add('light-mode');
+  } else {
+    // restore dark theme vars
+    root.style.setProperty('--accent', '#1e90ff');
+    root.style.setProperty('--muted', '#6b7280');
+    root.style.setProperty('--text', '#ffffff');
+    root.style.setProperty('--surface', '#161616');
+    root.style.setProperty('--surface2', '#1e1e1e');
+    root.style.setProperty('--body-bg', '#111');
+    root.style.setProperty('--header-from', '#0b1b2b');
+    root.style.setProperty('--header-to', '#07121a');
+    // dark overlay for modals
+    root.style.setProperty('--modal-overlay-bg', 'rgba(0,0,0,0.92)');
+    document.body.style.color = '#ddd';
+    document.querySelectorAll('header h1, header .subtitle').forEach(el=>el.style.color='#fff');
+    if (logo) logo.style.filter = '';
+    // remove class so CSS reverts
+    root.classList.remove('light-mode');
+  }
+
+  // scale: apply to root as CSS transform scale for UI containers and adjust spacing variables
+  root.style.setProperty('--ui-scale', s.scale);
+  document.documentElement.style.fontSize = (16 * (s.scale || 1)) + 'px';
+  // Language currently sets small label adjustments (extendable)
+  // For demonstration, update some small static labels if present (no i18n infra)
+  const lang = s.lang || 'en';
+  const subtitle = document.querySelector('.subtitle');
+  if (subtitle){
+    if (lang === 'es') subtitle.textContent = 'Texturas · Sprites · Flats · Imágenes · Sonidos · Música (MUS→WAV) — Todo decodificado en el cliente';
+    else if (lang === 'fr') subtitle.textContent = 'Textures · Sprites · Flats · Images · Sons · Musique (MUS→WAV) — Tout décodé côté client';
+    else if (lang === 'de') subtitle.textContent = 'Texturen · Sprites · Flats · Bilder · Sounds · Musik (MUS→WAV) — Alles clientseitig decodiert';
+    else if (lang === 'pt') subtitle.textContent = 'Texturas · Sprites · Flats · Imagens · Sons · Música (MUS→WAV) — Todos os assets decodificados no cliente';
+    else subtitle.textContent = 'Textures · Sprites · Flats · Images · Sounds · Music (MUS→WAV) — All assets decoded client-side';
+  }
+}
+
+function saveSettings(){
+  const s = {
+    mode: document.getElementById('dlToggle').dataset.mode === 'light' ? 'light' : 'dark',
+    scale: parseFloat(document.getElementById('guiScale').value),
+    lang: document.getElementById('langSelect').value
+  };
+  localStorage.setItem('doom_quick_settings', JSON.stringify(s));
+  applySettings(s);
+}
+
+function resetSettings(){
+  localStorage.removeItem('doom_quick_settings');
+  applySettings(DEFAULT_SETTINGS);
+  loadSettingsToUI();
+}
+
+function loadSettingsToUI(){
+  const s = getSettings();
+  // dlToggle button text reflects current
+  const t = document.getElementById('dlToggle');
+  t.dataset.mode = s.mode === 'light' ? 'light' : 'dark';
+  t.textContent = s.mode === 'light' ? 'Light' : 'Dark';
+  // gui scale
+  const scaleEl = document.getElementById('guiScale');
+  const scaleVal = document.getElementById('scaleVal');
+  scaleEl.value = s.scale || 1.0;
+  scaleVal.textContent = (s.scale || 1.0).toFixed(2) + '×';
+  // language
+  const langEl = document.getElementById('langSelect');
+  langEl.value = s.lang || 'en';
+}
+
+/* UI control wiring */
+document.getElementById('dlToggle')?.addEventListener('click', function(){
+  const cur = this.dataset.mode === 'light' ? 'light' : 'dark';
+  const next = cur === 'light' ? 'dark' : 'light';
+  this.dataset.mode = next;
+  this.textContent = next === 'light' ? 'Light' : 'Dark';
+  // live apply
+  const s = getSettings();
+  s.mode = next;
+  applySettings(s);
+});
+
+document.getElementById('guiScale')?.addEventListener('input', function(){
+  const v = parseFloat(this.value);
+  document.getElementById('scaleVal').textContent = v.toFixed(2) + '×';
+  const s = getSettings(); s.scale = v; applySettings(s);
+});
+
+document.getElementById('langSelect')?.addEventListener('change', function(){
+  const s = getSettings(); s.lang = this.value; applySettings(s);
+});
+
+/* Apply saved settings on load */
+window.addEventListener('DOMContentLoaded', ()=>{
+  applySettings(getSettings());
+  // ensure UI will reflect current settings when opened
+  loadSettingsToUI();
+});
+
+// ── Tab switch ─────────────────────────────────────────────────────────────
+function switchTab(id,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active'); $('panel-'+id).classList.add('active');
+}
+</script>
+</body>
+</html>
